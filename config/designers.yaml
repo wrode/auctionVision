@@ -1,0 +1,82 @@
+seed_designers:
+  - name: Hans Wegner
+    country: Denmark
+    era: "1940s-1960s"
+    aliases: ["Hans J. Wegner", "H.J. Wegner"]
+    producers: ["Carl Hansen & Søn", "PP Møbler", "GETAMA", "Johannes Hansen"]
+  - name: Finn Juhl
+    country: Denmark
+    era: "1940s-1960s"
+    aliases: ["Finn Juhl"]
+    producers: ["Niels Vodder", "France & Søn", "Bovirke", "Baker Furniture"]
+  - name: Arne Jacobsen
+    country: Denmark
+    era: "1950s-1970s"
+    aliases: ["Arne Jacobsen"]
+    producers: ["Fritz Hansen"]
+  - name: Eero Saarinen
+    country: Finland/USA
+    era: "1940s-1960s"
+    aliases: ["Eero Saarinen"]
+    producers: ["Knoll"]
+  - name: Bruno Mathsson
+    country: Sweden
+    era: "1930s-1960s"
+    aliases: ["Bruno Mathsson"]
+    producers: ["Firma Karl Mathsson", "DUX"]
+  - name: Ingmar Relling
+    country: Norway
+    era: "1960s-1970s"
+    aliases: ["Ingmar Relling"]
+    producers: ["Westnofa"]
+  - name: Børge Mogensen
+    country: Denmark
+    era: "1940s-1970s"
+    aliases: ["Borge Mogensen", "Børge Mogensen"]
+    producers: ["Fredericia", "FDB Møbler", "Søborg Møbelfabrik"]
+  - name: Poul Kjærholm
+    country: Denmark
+    era: "1950s-1970s"
+    aliases: ["Poul Kjaerholm", "Poul Kjærholm", "P. Kjærholm"]
+    producers: ["E. Kold Christensen", "Fritz Hansen"]
+  - name: Verner Panton
+    country: Denmark
+    era: "1960s-1970s"
+    aliases: ["Verner Panton"]
+    producers: ["Vitra", "Fritz Hansen", "Louis Poulsen"]
+  - name: Niels Otto Møller
+    country: Denmark
+    era: "1950s-1970s"
+    aliases: ["Niels O. Møller", "N.O. Møller", "Niels Otto Moller"]
+    producers: ["J.L. Møllers Møbelfabrik"]
+  - name: Ole Wanscher
+    country: Denmark
+    era: "1940s-1970s"
+    aliases: ["Ole Wanscher"]
+    producers: ["P. Jeppesens Møbelfabrik", "Carl Hansen & Søn"]
+  - name: Ib Kofod-Larsen
+    country: Denmark
+    era: "1950s-1960s"
+    aliases: ["Ib Kofod-Larsen", "Ib Kofod Larsen"]
+    producers: ["Faarup Møbelfabrik", "Christensen & Larsen", "G-Plan"]
+  - name: Illum Wikkelsø
+    country: Denmark
+    era: "1950s-1970s"
+    aliases: ["Illum Wikkelso", "Illum Wikkelsø"]
+    producers: ["Niels Eilersen", "CFC Silkeborg", "Holger Christiansen"]
+  - name: Kai Kristiansen
+    country: Denmark
+    era: "1950s-1970s"
+    aliases: ["Kai Kristiansen"]
+    producers: ["Feldballes Møbelfabrik", "Magnus Olesen"]
+
+adjacent_designers:
+  - name: Grete Jalk
+  - name: Nanna Ditzel
+  - name: Peter Hvidt
+  - name: Orla Mølgaard-Nielsen
+  - name: Sam Larsson
+  - name: Yngve Ekström
+  - name: Folke Ohlsson
+  - name: Karl Erik Ekselius
+  - name: Dux

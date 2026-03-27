@@ -1,0 +1,50 @@
+arbitrage:
+  weights:
+    price_gap: 0.40
+    norway_premium: 0.20
+    attribution_confidence: 0.15
+    condition: 0.10
+    liquidity: 0.10
+    timing: 0.05
+
+taste:
+  weights:
+    designer_similarity: 0.35
+    visual_similarity: 0.20
+    material_fit: 0.15
+    era_fit: 0.15
+    user_behavior_match: 0.10
+    novelty_bonus: 0.05
+
+wildcard:
+  weights:
+    image_distinctiveness: 0.35
+    sculptural_presence: 0.20
+    rarity_cues: 0.15
+    material_luxury: 0.10
+    provenance_interest: 0.10
+    manual_curator_boost: 0.10
+
+thresholds:
+  best_buys_min_arbitrage: 0.6
+  best_buys_min_confidence: 0.4
+  norway_arb_min_gap_score: 0.5
+  taste_min_score: 0.5
+  wildcard_min_score: 0.6
+  ending_soon_hours: 4
+  ending_soon_min_score: 0.4
+
+urgency:
+  hours_remaining_buckets:
+    - max_hours: 1
+      score: 1.0
+    - max_hours: 2
+      score: 0.85
+    - max_hours: 4
+      score: 0.65
+    - max_hours: 12
+      score: 0.4
+    - max_hours: 24
+      score: 0.2
+    - max_hours: 48
+      score: 0.1

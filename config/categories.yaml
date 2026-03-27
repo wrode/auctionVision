@@ -1,0 +1,57 @@
+furniture_types:
+  seating:
+    canonical: seating
+    subtypes:
+      - lounge_chair
+      - armchair
+      - easy_chair
+      - dining_chair
+      - desk_chair
+      - rocking_chair
+      - stool
+      - bench
+    aliases:
+      lounge_chair: ["lounge chair", "fåtölj", "vilstol", "easy chair", "loungestol"]
+      armchair: ["armchair", "karmstol", "arm chair"]
+      dining_chair: ["dining chair", "matstol", "stol", "side chair"]
+      desk_chair: ["desk chair", "kontorsstol", "office chair", "swivel chair", "snurrstol"]
+      rocking_chair: ["rocking chair", "gungstol"]
+      stool: ["stool", "pall", "taburett", "footstool", "fotpall"]
+      bench: ["bench", "bänk", "daybed", "dagbädd"]
+  tables:
+    canonical: table
+    subtypes:
+      - dining_table
+      - coffee_table
+      - side_table
+      - desk
+      - console_table
+    aliases:
+      dining_table: ["dining table", "matbord", "eettafel"]
+      coffee_table: ["coffee table", "soffbord", "salongbord"]
+      side_table: ["side table", "sidobord", "lamp table", "end table"]
+      desk: ["desk", "skrivbord", "writing desk", "bureau"]
+      console_table: ["console table", "avlastningsbord"]
+  storage:
+    canonical: storage
+    subtypes:
+      - sideboard
+      - bookcase
+      - cabinet
+      - chest_of_drawers
+      - shelf
+    aliases:
+      sideboard: ["sideboard", "buffet", "credenza", "dressoir"]
+      bookcase: ["bookcase", "bokhylla", "bookshelf"]
+      cabinet: ["cabinet", "skåp", "vitrinskåp", "display cabinet"]
+      chest_of_drawers: ["chest of drawers", "byrå", "dresser", "kommod"]
+      shelf: ["shelf", "hylla", "wall shelf", "vägghylla"]
+  sofas:
+    canonical: sofa
+    subtypes:
+      - sofa
+      - sectional
+      - settee
+    aliases:
+      sofa: ["sofa", "soffa", "couch", "divan"]
+      settee: ["settee", "loveseat", "two-seater"]

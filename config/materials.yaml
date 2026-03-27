@@ -1,0 +1,54 @@
+materials:
+  wood:
+    canonical: wood
+    subtypes:
+      - teak
+      - rosewood
+      - oak
+      - walnut
+      - beech
+      - birch
+      - mahogany
+      - pine
+      - ash
+      - elm
+      - cherry
+    aliases:
+      teak: ["teak", "teak wood", "teakträ"]
+      rosewood: ["rosewood", "palisander", "jacaranda", "rio rosewood", "brazilian rosewood"]
+      oak: ["oak", "ek", "eik", "white oak"]
+      walnut: ["walnut", "valnöt"]
+      beech: ["beech", "bok"]
+      birch: ["birch", "björk"]
+  leather:
+    canonical: leather
+    subtypes:
+      - aniline_leather
+      - semi_aniline
+      - pigmented
+      - patinated
+    aliases:
+      leather: ["leather", "läder", "skinn", "hide"]
+      aniline_leather: ["aniline leather", "anilinläder"]
+  fabric:
+    canonical: fabric
+    subtypes:
+      - wool
+      - linen
+      - cotton
+      - velvet
+    aliases:
+      wool: ["wool", "ull", "ullit"]
+      linen: ["linen", "linne"]
+  metal:
+    canonical: metal
+    subtypes:
+      - steel
+      - chrome
+      - brass
+      - copper
+      - aluminum
+    aliases:
+      steel: ["steel", "stål"]
+      chrome: ["chrome", "chromed steel", "chrome-plated", "krom"]
+      brass: ["brass", "mässing"]

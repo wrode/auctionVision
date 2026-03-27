@@ -1,0 +1,39 @@
+sources:
+  auctionet:
+    name: Auctionet
+    base_url: https://auctionet.com
+    enabled: true
+    fetch_strategy: httpx
+    parser_name: auctionet
+    rate_limit:
+      requests_per_minute: 20
+      delay_between_requests_seconds: 3
+    buyer_premium:
+      percentage: 0.225
+      vat_on_premium: 0.25
+    categories:
+      - furniture
+    refresh_cadence:
+      broad_crawl_minutes: 60
+      active_lots_minutes: 15
+      ending_soon_minutes: 5
+      ending_very_soon_seconds: 30
+  bukowskis:
+    name: Bukowskis
+    base_url: https://www.bukowskis.com
+    enabled: false
+    fetch_strategy: httpx
+    parser_name: bukowskis
+    rate_limit:
+      requests_per_minute: 15
+      delay_between_requests_seconds: 4
+    buyer_premium:
+      percentage: 0.25
+      vat_on_premium: 0.25
+    categories:
+      - furniture
+    refresh_cadence:
+      broad_crawl_minutes: 90
+      active_lots_minutes: 20
+      ending_soon_minutes: 5
+      ending_very_soon_seconds: 30

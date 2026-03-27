@@ -1,0 +1,53 @@
+# Editable Norway arbitrage cost assumptions
+# All values in SEK unless otherwise noted
+
+norway_arbitrage:
+  # Currency conversion
+  sek_to_nok_rate: 1.02  # approximate, should be updated
+
+  # Buyer's premium (Auctionet default)
+  buyer_premium_rate: 0.225
+  vat_on_premium_rate: 0.25  # 25% VAT on buyer's premium in Sweden
+
+  # Transport estimates (SEK)
+  transport:
+    small_item: 1500      # small chair, lamp
+    medium_item: 3000     # standard chair, small table
+    large_item: 5000      # sofa, large table, sideboard
+    oversized_item: 8000  # sectional, very large pieces
+
+  # Restoration buffer (percentage of hammer price)
+  restoration:
+    none_needed: 0.0
+    minor_touch_up: 0.05
+    moderate_restoration: 0.15
+    significant_restoration: 0.30
+
+  # Import/customs (Norway)
+  import:
+    # Antiques (100+ years) may be exempt from customs
+    antique_threshold_years: 100
+    customs_rate: 0.0       # usually 0 for furniture
+    norwegian_vat_rate: 0.25 # 25% MVA
+    # Note: items for personal use may have different rules
+
+  # Resale assumptions
+  resale:
+    # Premium multiplier ranges for Norway market vs Swedish auction
+    # e.g., a well-known Danish modern piece might sell for 1.3-1.8x in Norway
+    premium_multiplier_low: 1.2
+    premium_multiplier_mid: 1.5
+    premium_multiplier_high: 2.0
+
+    # Dealer margin if selling through a shop
+    dealer_commission_rate: 0.30
+
+    # Private sale (no commission)
+    private_sale_commission: 0.0
+
+  # Norway gap labels
+  labels:
+    strong: 0.7    # norway_gap_score >= 0.7
+    moderate: 0.4  # norway_gap_score >= 0.4
+    weak: 0.2      # norway_gap_score >= 0.2
+    none: 0.0      # below 0.2
