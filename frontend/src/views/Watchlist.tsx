@@ -20,8 +20,8 @@ export const Watchlist = () => {
     <>
       <ViewHeader
         title="Watchlist"
-        lotCount={viewData()?.lot_count}
-        lastRefreshed={viewData()?.last_refreshed}
+        lotCount={viewData()?.total}
+        lastRefreshed={viewData()?.filters?.last_refreshed}
         onRefresh={handleRefresh}
         loading={viewData.loading}
       />
@@ -33,7 +33,7 @@ export const Watchlist = () => {
                 {(lot) => (
                   <div>
                     <LotCard lot={lot} />
-                    <Show when={lot.watched}>
+                    <Show when={lot.user_actions?.includes('watch')}>
                       <div style="padding: var(--spacing-sm); background-color: rgba(56, 142, 60, 0.1); border: 1px solid var(--score-green); border-top: none; border-radius: 0 0 var(--radius-md) var(--radius-md); text-align: center;">
                         <span style="font-size: 0.75rem; color: var(--score-green); font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">
                           ✓ Watching

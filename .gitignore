@@ -49,12 +49,14 @@ venv.bak/
 .coverage
 htmlcov/
 
-# Data storage
-data/snapshots/
-data/images/
+# Data storage (all local runtime data)
+data/
 *.db
 *.sqlite
 *.sqlite3
+
+# Claude Code (user-specific)
+.claude/
 
 # Node (frontend)
 node_modules/

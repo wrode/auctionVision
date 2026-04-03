@@ -1,0 +1,120 @@
+# Resale arbitrage cost assumptions
+# All values in SEK unless otherwise noted
+
+resale_arbitrage:
+  # Buyer's premium (Auctionet default)
+  buyer_premium_rate: 0.20
+  vat_on_premium_rate: 0.25  # 25% VAT on buyer's premium in Sweden
+
+  # Base transport estimates (SEK) — for nearby Swedish cities
+  transport:
+    small_item: 1500      # small chair, lamp
+    medium_item: 3000     # standard chair, small table
+    large_item: 5000      # sofa, large table, sideboard
+    oversized_item: 8000  # sectional, very large pieces
+
+  # Location-based transport multipliers (relative to base costs above)
+  # Buyer is in Norway — costs scale with distance from seller to Norway
+  transport_location_multiplier:
+    # Sweden — nearby
+    "Gothenburg, Sweden": 0.8
+    "Malmö, Sweden": 1.0
+    "Helsingborg, Sweden": 1.0
+    "Halmstad, Sweden": 0.9
+    "Lund, Sweden": 1.0
+    "Trelleborg, Sweden": 1.0
+    "Stockholm, Sweden": 1.2
+    "Norrköping, Sweden": 1.1
+    "Linköping, Sweden": 1.1
+    "Jönköping, Sweden": 1.0
+    "Kalmar, Sweden": 1.1
+    "Växjö, Sweden": 1.1
+    "Oskarshamn, Sweden": 1.1
+    "Nyköping, Sweden": 1.2
+    "Falun, Sweden": 1.2
+    "Mora, Sweden": 1.3
+    "Sandviken, Sweden": 1.2
+    "Umeå, Sweden": 1.5
+    "Vänersborg, Sweden": 0.9
+    "Södra Sandby, Sweden": 1.0
+
+    # Denmark — ferry/bridge costs
+    "Copenhagen, Denmark": 1.3
+    "Køge, Denmark": 1.3
+
+    # Germany — longer haul
+    "Hamburg, Germany": 1.6
+    "Düsseldorf, Germany": 1.8
+    "Cologne, Germany": 1.8
+    "Bocholt-Suderwick, Germany": 1.8
+
+    # Spain — significant shipping
+    "Barcelona, Spain": 2.5
+
+    # UK — ferry + transport
+    "Crewkerne, United Kingdom": 2.2
+    "Stowmarket, United Kingdom": 2.2
+
+    # Country-level fallbacks (used when city not found)
+    _default_Sweden: 1.1
+    _default_Denmark: 1.3
+    _default_Germany: 1.8
+    _default_Spain: 2.5
+    _default_United Kingdom: 2.2
+    _default_France: 2.0
+    _default_Italy: 2.3
+    _default_Netherlands: 1.8
+    _default_Belgium: 1.8
+    _default_Finland: 1.5
+    _default_unknown: 1.5
+
+  # Restoration buffer (percentage of hammer price)
+  restoration:
+    none_needed: 0.0
+    minor_touch_up: 0.05
+    moderate_restoration: 0.15
+    significant_restoration: 0.30
+
+  # Import/customs (target market defaults — override per market)
+  import:
+    antique_threshold_years: 100
+    customs_rate: 0.0
+    import_vat_rate: 0.25
+
+  # Resale assumptions
+  resale:
+    # Premium multiplier ranges for target market vs source auction
+    premium_multiplier_low: 1.2
+    premium_multiplier_mid: 1.5
+    premium_multiplier_high: 2.0
+
+    # Dealer margin if selling through a shop
+    dealer_commission_rate: 0.30
+
+    # Private sale (no commission)
+    private_sale_commission: 0.0
+
+  # Target markets (can add more here)
+  markets:
+    norway:
+      currency: NOK
+      fx_rate_from_sek: 1.02
+      import_vat_rate: 0.25  # MVA
+      customs_rate: 0.0
+
+  # Source value weights: how close each source's price is to actual
+  # achievable Norwegian resale value. 1.0 = IS the resale value.
+  # These multiply the comparable's price to estimate real value.
+  source_value_weights:
+    norway_auction: 0.95   # Blomqvist hammer = what Norwegian buyers actually pay
+    resale: 0.70           # FINN.no asking = negotiated down ~25-30%
+    dealer: 0.50           # Pamono/1stDibs = inflated by curation/shipping
+    auction: 0.40          # Swedish auction hammer = lower market than Norway
+    retail: 0.30           # New retail = secondhand is ~30% of new
+
+  # Resale arbitrage score labels
+  labels:
+    strong: 0.7    # resale_arb_score >= 0.7
+    moderate: 0.4  # resale_arb_score >= 0.4
+    weak: 0.2      # resale_arb_score >= 0.2
+    none: 0.0      # below 0.2

@@ -3,12 +3,13 @@
 import asyncio
 import hashlib
 import logging
+import re
 from abc import ABC, abstractmethod
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Optional
 
-import httpx
+from playwright.async_api import async_playwright
 
 from backend.config import settings
 
@@ -29,7 +30,6 @@ class BaseFetcher(ABC):
         self.source_name = source_name
         self.rate_limit_requests = rate_limit_requests
         self.rate_limit_period = rate_limit_period
-        self.client = httpx.AsyncClient(timeout=30.0)
 
     @abstractmethod
     async def fetch_listing_page(self, page_num: int, **kwargs) -> list[dict[str, Any]]:
@@ -61,12 +61,12 @@ class BaseFetcher(ABC):
         return hashlib.sha256(content).hexdigest()
 
     async def close(self):
-        """Close HTTP client."""
-        await self.client.aclose()
+        """Close any resources."""
+        pass
 
 
 class AuctionetFetcher(BaseFetcher):
-    """Fetcher for Auctionet.com."""
+    """Fetcher for Auctionet.com using Playwright."""
 
     def __init__(self):
         """Initialize Auctionet fetcher."""
@@ -76,23 +76,22 @@ class AuctionetFetcher(BaseFetcher):
             rate_limit_period=settings.auctionet_rate_limit_period,
         )
         self.base_url = settings.auctionet_base_url
-        self.request_times = []
+        self.browser = None
+        self.context = None
+        self.page = None
+
+    async def _init_browser(self):
+        """Initialize Playwright browser and page."""
+        if self.browser is None:
+            playwright = await async_playwright().start()
+            self.browser = await playwright.chromium.launch(headless=True)
+            self.context = await self.browser.new_context()
+            self.page = await self.context.new_page()
+            logger.info("Initialized Playwright browser")
 
     async def _apply_rate_limit(self):
-        """Apply rate limiting to requests."""
-        now = datetime.utcnow().timestamp()
-        # Remove old timestamps outside the window
-        self.request_times = [t for t in self.request_times if now - t < self.rate_limit_period]
-
-        # Wait if necessary
-        if len(self.request_times) >= self.rate_limit_requests:
-            sleep_time = self.rate_limit_period - (now - self.request_times[0])
-            if sleep_time > 0:
-                logger.info(f"Rate limit hit, sleeping for {sleep_time:.1f}s")
-                await asyncio.sleep(sleep_time)
-            self.request_times = []
-
-        self.request_times.append(datetime.utcnow().timestamp())
+        """Apply simple rate limiting between requests."""
+        await asyncio.sleep(2)
 
     async def fetch_listing_page(
         self,
@@ -108,17 +107,69 @@ class AuctionetFetcher(BaseFetcher):
         Returns:
             List of lot metadata with external_lot_id and lot_url
         """
+        await self._init_browser()
         await self._apply_rate_limit()
 
-        # Stub implementation - would construct actual search URL
-        logger.info(f"Fetching listing page {page_num} for category {category}")
-        # In real implementation, would:
-        # 1. Construct URL: https://auctionet.com/search?category=furniture&page=1
-        # 2. Fetch and parse HTML
-        # 3. Extract lot URLs and IDs
-        # 4. Return as list of dicts
+        url = f"{self.base_url}/en/search?q={category}&page={page_num}"
+        logger.info(f"Fetching listing page {page_num} for category {category}: {url}")
 
-        return []
+        try:
+            await self.page.goto(url, wait_until="networkidle")
+            html = await self.page.content()
+
+            from bs4 import BeautifulSoup
+            soup = BeautifulSoup(html, "html.parser")
+
+            lots = []
+            seen_ids = set()
+
+            # Extract lot links matching /en/{id}-{slug} pattern
+            for link in soup.find_all("a", href=re.compile(r"/en/\d+-")):
+                href = link.get("href")
+                if not href:
+                    continue
+
+                # Extract lot ID using regex: /en/(\d+)-
+                match = re.search(r"/en/(\d+)-", href)
+                if not match:
+                    continue
+
+                lot_id = match.group(1)
+                if lot_id in seen_ids:
+                    continue
+
+                seen_ids.add(lot_id)
+
+                # Normalize URL to absolute
+                if href.startswith("/"):
+                    lot_url = f"{self.base_url}{href}"
+                else:
+                    lot_url = href
+
+                # Try to find thumbnail image near this link
+                thumb_url = None
+                card = link.parent
+                for _ in range(3):
+                    if card and card.parent:
+                        card = card.parent
+                if card:
+                    img = card.find("img")
+                    if img:
+                        thumb_url = img.get("src") or img.get("data-src")
+
+                lots.append({
+                    "external_lot_id": lot_id,
+                    "lot_url": lot_url,
+                    "thumbnail_url": thumb_url,
+                })
+                logger.debug(f"Found lot: {lot_id} -> {lot_url}")
+
+            logger.info(f"Extracted {len(lots)} lots from page {page_num}")
+            return lots
+
+        except Exception as e:
+            logger.error(f"Error fetching listing page {page_num}: {e}")
+            return []
 
     async def fetch_lot_detail(self, lot_url: str) -> dict[str, Any]:
         """Fetch a single lot detail page from Auctionet.
@@ -129,19 +180,22 @@ class AuctionetFetcher(BaseFetcher):
         Returns:
             Dictionary with raw_html, http_status, content_hash, raw_html_path
         """
+        await self._init_browser()
         await self._apply_rate_limit()
 
         logger.info(f"Fetching lot detail: {lot_url}")
 
         try:
-            response = await self.client.get(lot_url)
-            content = response.content
+            await self.page.goto(lot_url, wait_until="networkidle")
+            html = await self.page.content()
+            content = html.encode("utf-8")
             content_hash = self._compute_content_hash(content)
 
-            # Extract lot ID from URL (stub - real extraction would be more sophisticated)
+            # Extract lot ID from URL using regex: /en/(\d+)-
             lot_id = "unknown"
-            if "/lot/" in lot_url:
-                lot_id = lot_url.split("/lot/")[-1].split("/")[0]
+            match = re.search(r"/en/(\d+)-", lot_url)
+            if match:
+                lot_id = match.group(1)
 
             # Save raw HTML to snapshots directory
             date_str = datetime.utcnow().strftime("%Y-%m-%d")
@@ -154,12 +208,12 @@ class AuctionetFetcher(BaseFetcher):
             logger.info(f"Saved HTML to {raw_html_path}")
 
             return {
-                "http_status": response.status_code,
+                "http_status": 200,
                 "content_hash": content_hash,
-                "raw_html": content.decode("utf-8", errors="ignore"),
+                "raw_html": html,
                 "raw_html_path": str(raw_html_path),
-                "success": response.status_code == 200,
-                "error_message": None if response.status_code == 200 else f"HTTP {response.status_code}",
+                "success": True,
+                "error_message": None,
             }
 
         except Exception as e:
@@ -172,3 +226,13 @@ class AuctionetFetcher(BaseFetcher):
                 "success": False,
                 "error_message": str(e),
             }
+
+    async def close(self):
+        """Close Playwright browser."""
+        if self.page:
+            await self.page.close()
+        if self.context:
+            await self.context.close()
+        if self.browser:
+            await self.browser.close()
+        logger.info("Closed Playwright browser")

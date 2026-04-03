@@ -5,6 +5,7 @@ import asyncio
 import sys
 import logging
 from pathlib import Path
+from datetime import datetime
 
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -16,101 +17,188 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-class StubSettings:
-    """Stub settings loader for when backend modules aren't available."""
-    def __init__(self):
-        self.auctionet_base_url = "https://auctionet.com"
-        self.requests_per_minute = 20
-        self.delay_between_requests_seconds = 3
+async def fetch_source(source_name: str, category: str = "furniture", max_pages: int = 2):
+    """Broad crawl of a source with database integration."""
+    # Import backend modules
+    from backend.config import settings
+    from backend.database import SessionLocal, init_db
+    from backend.ingestion.fetcher import AuctionetFetcher
+    from backend.models import Source, Lot, LotFetch, LotImage
 
+    # Initialize database
+    init_db()
+    db = SessionLocal()
 
-class StubFetcher:
-    """Stub fetcher implementation for development."""
-
-    def __init__(self, settings):
-        self.settings = settings
-        self.logger = logging.getLogger(__name__)
-
-    async def fetch_listing_page(self, page: int, category: str = "furniture"):
-        """Stub: fetch a listing page."""
-        self.logger.info(f"[STUB] Fetching listing page {page} from {self.settings.auctionet_base_url}")
-        self.logger.info(f"[STUB] Category: {category}")
-        # Return empty list to avoid errors
-        return []
-
-    async def fetch_lot_detail(self, url: str):
-        """Stub: fetch a single lot detail."""
-        self.logger.info(f"[STUB] Fetching lot detail from {url}")
-        return {"content_hash": "stub_hash_0000"}
-
-    async def close(self):
-        """Cleanup."""
-        pass
-
-
-def load_settings():
-    """Load settings from config or return stub."""
     try:
-        from backend.config import load_settings as real_load
-        return real_load()
-    except (ImportError, ModuleNotFoundError):
-        logger.warning("backend.config not available, using stub settings")
-        return StubSettings()
+        # Initialize fetcher
+        fetcher = AuctionetFetcher()
+        logger.info(f"Starting broad crawl of {source_name}, category={category}, max_pages={max_pages}")
 
+        # Create or get Source record
+        source = db.query(Source).filter(Source.name == source_name).first()
+        if not source:
+            source = Source(
+                name=source_name,
+                base_url=settings.auctionet_base_url,
+                parser_name="auctionet_v2",
+            )
+            db.add(source)
+            db.commit()
+            logger.info(f"Created new Source: {source_name}")
+        else:
+            logger.info(f"Using existing Source: {source_name}")
 
-def get_fetcher(settings):
-    """Get fetcher instance."""
-    try:
-        from backend.ingestion.fetcher import AuctionetFetcher
-        return AuctionetFetcher(settings)
-    except (ImportError, ModuleNotFoundError):
-        logger.warning("backend.ingestion.fetcher not available, using stub fetcher")
-        return StubFetcher(settings)
+        # Fetch listings and discover lots
+        all_lots = []
+        for page in range(1, max_pages + 1):
+            listing_data = await fetcher.fetch_listing_page(page, category=category)
+            if not listing_data:
+                logger.info(f"Page {page}: no lots found, stopping")
+                break
 
+            logger.info(f"Page {page}: found {len(listing_data)} lots")
+            all_lots.extend(listing_data)
 
-async def fetch_source(source_name: str, category: str = "furniture", max_pages: int = 5):
-    """Broad crawl of a source."""
-    settings = load_settings()
-    fetcher = get_fetcher(settings)
+        logger.info(f"Total lots discovered: {len(all_lots)}")
 
-    logger.info(f"Starting broad crawl of {source_name}, category={category}, max_pages={max_pages}")
+        # For each lot, fetch detail and save records
+        for lot_data in all_lots:
+            external_lot_id = lot_data.get("external_lot_id")
+            lot_url = lot_data.get("lot_url")
 
-    lot_urls = []
-    for page in range(1, max_pages + 1):
-        urls = await fetcher.fetch_listing_page(page, category=category)
-        if not urls:
-            logger.info(f"Page {page}: no lots found, stopping")
-            break
-        lot_urls.extend(urls)
-        logger.info(f"Page {page}: found {len(urls)} lots")
+            if not lot_url:
+                logger.warning(f"Skipping lot with no URL: {lot_data}")
+                continue
 
-    logger.info(f"Total lots found: {len(lot_urls)}")
+            logger.info(f"Processing lot {external_lot_id}: {lot_url}")
 
-    for url in lot_urls:
-        try:
-            result = await fetcher.fetch_lot_detail(url)
-            content_hash = result.get('content_hash', 'unknown')[:12]
-            logger.info(f"Fetched: {url} -> {content_hash}")
-        except Exception as e:
-            logger.error(f"Failed to fetch {url}: {e}")
+            # Create or get Lot record
+            lot = db.query(Lot).filter(
+                Lot.source_id == source.id,
+                Lot.external_lot_id == external_lot_id,
+            ).first()
 
-    await fetcher.close()
-    logger.info("Broad crawl complete")
+            if not lot:
+                lot = Lot(
+                    source_id=source.id,
+                    external_lot_id=external_lot_id,
+                    lot_url=lot_url,
+                )
+                db.add(lot)
+                db.commit()
+                logger.info(f"Created new Lot: {external_lot_id}")
+            else:
+                logger.info(f"Using existing Lot: {external_lot_id}")
+
+            # Fetch lot detail
+            try:
+                fetch_result = await fetcher.fetch_lot_detail(lot_url)
+
+                if not fetch_result.get("success"):
+                    logger.warning(f"Failed to fetch lot {external_lot_id}: {fetch_result.get('error_message')}")
+                    continue
+
+                # Create LotFetch record
+                lot_fetch = LotFetch(
+                    lot_id=lot.id,
+                    fetched_at=datetime.utcnow(),
+                    fetch_type="full",
+                    http_status=fetch_result.get("http_status"),
+                    content_hash=fetch_result.get("content_hash"),
+                    raw_html_path=fetch_result.get("raw_html_path"),
+                    success=fetch_result.get("success", 0),
+                    error_message=fetch_result.get("error_message"),
+                )
+                db.add(lot_fetch)
+                db.commit()
+                logger.info(f"Created LotFetch: {external_lot_id}")
+
+                # Update lot's last_fetched_at
+                lot.last_fetched_at = datetime.utcnow()
+                db.commit()
+
+            except Exception as e:
+                logger.error(f"Error fetching lot {external_lot_id}: {e}")
+                continue
+
+        logger.info("Broad crawl complete")
+
+    finally:
+        await fetcher.close()
+        db.close()
 
 
 async def fetch_lot(lot_url: str):
-    """Fetch a single lot."""
-    settings = load_settings()
-    fetcher = get_fetcher(settings)
+    """Fetch a single lot by URL."""
+    from backend.config import settings
+    from backend.database import SessionLocal, init_db
+    from backend.ingestion.fetcher import AuctionetFetcher
+    from backend.models import Source, Lot, LotFetch
 
-    logger.info(f"Fetching single lot: {lot_url}")
-    result = await fetcher.fetch_lot_detail(lot_url)
-    content_hash = result.get('content_hash', 'unknown')
+    init_db()
+    db = SessionLocal()
 
-    logger.info(f"Fetched: {lot_url}")
-    logger.info(f"Content hash: {content_hash}")
+    try:
+        fetcher = AuctionetFetcher()
+        logger.info(f"Fetching single lot: {lot_url}")
 
-    await fetcher.close()
+        # Get or create source
+        source = db.query(Source).filter(Source.name == "auctionet").first()
+        if not source:
+            source = Source(
+                name="auctionet",
+                base_url=settings.auctionet_base_url,
+                parser_name="auctionet_v2",
+            )
+            db.add(source)
+            db.commit()
+
+        # Extract lot ID from URL using regex: /en/(\d+)-
+        import re
+        lot_id = "unknown"
+        match = re.search(r"/en/(\d+)-", lot_url)
+        if match:
+            lot_id = match.group(1)
+
+        # Get or create lot
+        lot = db.query(Lot).filter(
+            Lot.source_id == source.id,
+            Lot.external_lot_id == lot_id,
+        ).first()
+
+        if not lot:
+            lot = Lot(
+                source_id=source.id,
+                external_lot_id=lot_id,
+                lot_url=lot_url,
+            )
+            db.add(lot)
+            db.commit()
+
+        # Fetch and save
+        fetch_result = await fetcher.fetch_lot_detail(lot_url)
+
+        lot_fetch = LotFetch(
+            lot_id=lot.id,
+            fetched_at=datetime.utcnow(),
+            fetch_type="full",
+            http_status=fetch_result.get("http_status"),
+            content_hash=fetch_result.get("content_hash"),
+            raw_html_path=fetch_result.get("raw_html_path"),
+            success=fetch_result.get("success", 0),
+            error_message=fetch_result.get("error_message"),
+        )
+        db.add(lot_fetch)
+        db.commit()
+
+        lot.last_fetched_at = datetime.utcnow()
+        db.commit()
+
+        logger.info(f"Fetched lot {lot_id}, saved to {fetch_result.get('raw_html_path')}")
+
+    finally:
+        await fetcher.close()
+        db.close()
 
 
 def main():
@@ -132,8 +220,8 @@ def main():
     source_parser.add_argument(
         "--max-pages",
         type=int,
-        default=5,
-        help="Maximum pages to fetch (default: 5)"
+        default=2,
+        help="Maximum pages to fetch (default: 2)"
     )
 
     lot_parser = subparsers.add_parser(

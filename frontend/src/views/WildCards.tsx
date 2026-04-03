@@ -5,7 +5,7 @@ import { LotCard } from '../components/LotCard';
 
 export const WildCards = () => {
   const [viewData] = createResource(() =>
-    apiClient.fetchView('wild_cards', { limit: 50 }),
+    apiClient.fetchView('wildcards', { limit: 50 }),
   );
 
   const handleRefresh = async () => {
@@ -20,8 +20,8 @@ export const WildCards = () => {
     <>
       <ViewHeader
         title="Wild Cards"
-        lotCount={viewData()?.lot_count}
-        lastRefreshed={viewData()?.last_refreshed}
+        lotCount={viewData()?.total}
+        lastRefreshed={viewData()?.filters?.last_refreshed}
         onRefresh={handleRefresh}
         loading={viewData.loading}
       />
@@ -34,7 +34,7 @@ export const WildCards = () => {
                   <div style="border: 1px solid var(--border-color); border-radius: var(--radius-md); overflow: hidden; background-color: var(--bg-card); transition: all var(--transition);" class="lot-card">
                     <Show when={lot.image_url}>
                       <img
-                        src={lot.image_url}
+                        src={lot.image_url!}
                         alt={lot.title}
                         style="width: 100%; height: 280px; object-fit: cover; display: block;"
                       />
@@ -48,7 +48,7 @@ export const WildCards = () => {
                       </Show>
                       <div style="display: flex; justify-content: space-between; align-items: center;">
                         <span style="font-weight: 600; color: var(--accent-gold);">
-                          {(lot.wildcard_score! * 100).toFixed(0)}% Wild
+                          {((lot.scores?.wildcard || 0) * 100).toFixed(0)}% Wild
                         </span>
                         <Show when={lot.current_bid}>
                           <span style="color: var(--text-secondary);">

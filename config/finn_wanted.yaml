@@ -1,0 +1,118 @@
+# Finn.no "Ønskes kjøpt" (wanted to buy) scraping config
+# These are demand signals - people actively looking to buy specific items.
+
+finn:
+  base_url: https://www.finn.no
+  trade_type: 3  # 3 = Ønskes kjøpt
+
+  rate_limit:
+    delay_between_requests_seconds: 3
+    max_pages_per_category: 10
+
+  # Furniture subcategories under Møbler og interiør (category 0.78)
+  categories:
+    - sub_category: "1.78.5196"
+      name: "Bord og stoler"
+    - sub_category: "1.78.7756"
+      name: "Sofaer og lenestoler"
+    - sub_category: "1.78.5181"
+      name: "Belysning"
+    - sub_category: "1.78.5198"
+      name: "Garderobe og skap"
+    - sub_category: "1.78.8345"
+      name: "Hyller og kommoder"
+
+# High-value filtering: listing must match at least one criterion to be kept.
+# Brand OR designer match OR price above floor.
+filters:
+  # Minimum offered price in NOK. Listings below this with no brand/designer match are skipped.
+  min_price_nok: 1000
+
+  # Known high-value brands (as they appear on Finn listing cards)
+  high_value_brands:
+    - Fritz Hansen
+    - Vitra
+    - Carl Hansen
+    - "Carl Hansen & Søn"
+    - HAY
+    - "&Tradition"
+    - Muuto
+    - Kartell
+    - Cassina
+    - Knoll
+    - Herman Miller
+    - Artek
+    - PP Møbler
+    - Louis Poulsen
+    - Flos
+    - Foscarini
+    - Le Klint
+    - BoConcept
+    - Fredericia
+    - GETAMA
+    - Gubi
+    - Menu
+    - Normann Copenhagen
+    - String
+    - Montana
+    - Stokke
+    - Ekornes
+    - Stressless
+    - Bolia
+
+  # Known high-value designers (matched against listing title, case-insensitive)
+  high_value_designers:
+    - Arne Jacobsen
+    - Hans Wegner
+    - Hans J Wegner
+    - Finn Juhl
+    - Børge Mogensen
+    - Borge Mogensen
+    - Poul Kjærholm
+    - Poul Kjaerholm
+    - Verner Panton
+    - Bruno Mathsson
+    - Alvar Aalto
+    - Eero Saarinen
+    - Charles Eames
+    - Le Corbusier
+    - Mies van der Rohe
+    - Marcel Breuer
+    - Philippe Starck
+    - Achille Castiglioni
+    - Poul Henningsen
+    - Ingmar Relling
+    - Niels Otto Møller
+    - Kai Kristiansen
+    - Ole Wanscher
+    - Ib Kofod-Larsen
+    - Illum Wikkelsø
+    - Mogens Koch
+    - Kaare Klint
+    - Nanna Ditzel
+    - Grete Jalk
+    - Yngve Ekström
+    - Sigurd Ressell
+
+    # Added from lot-data frequency analysis (2026-04)
+    - Carl Malmsten
+    - Svante Skogh
+    - Torbjörn Afdal
+    - Johannes Andersen
+    - Vico Magistretti
+    - Michel Ducaroy
+    - Josef Hoffmann
+    - Arne Norell
+    - Poul Volther
+    - Peter Hvidt
+    - Ico Parisi
+    - Hans Olsen
+
+    # Iconic model names (kept as before)
+    - Falcon
+    - Cesca
+    - Superellipse
+    - Wishbone
+    - Egg Chair
+    - Swan Chair
+    - Ant Chair

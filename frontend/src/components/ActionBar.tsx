@@ -9,13 +9,13 @@ interface ActionBarProps {
 
 export const ActionBar = (props: ActionBarProps) => {
   const [loading, setLoading] = createSignal(false);
-  const [watched, setWatched] = createSignal(props.lot.watched ?? false);
-  const [archived, setArchived] = createSignal(props.lot.archived ?? false);
+  const [watched, setWatched] = createSignal(props.lot.user_actions?.includes('watch') ?? false);
+  const [archived, setArchived] = createSignal(props.lot.user_actions?.includes('archive') ?? false);
 
   const handleAction = async (action: 'star' | 'skip' | 'watch' | 'archive') => {
     setLoading(true);
     try {
-      await apiClient.postAction(props.lot.id, { action });
+      await apiClient.postAction(String(props.lot.id), { action });
 
       switch (action) {
         case 'watch':

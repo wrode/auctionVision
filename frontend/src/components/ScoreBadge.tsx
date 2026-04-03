@@ -3,7 +3,7 @@ import { Show } from 'solid-js';
 interface ScoreBadgeProps {
   score?: number;
   label: string;
-  variant?: 'arbitrage' | 'taste' | 'wildcard' | 'norway';
+  variant?: 'arbitrage' | 'taste' | 'wildcard' | 'resale' | 'demand';
   size?: 'sm' | 'md' | 'lg';
 }
 

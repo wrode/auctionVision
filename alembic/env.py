@@ -19,7 +19,7 @@ from backend.database import Base
 from backend.models import (
     Source, Lot, LotFetch, LotImage, ParsedLotFields,
     NormalizedLotFields, Entity, Comparable, EnrichmentRun,
-    EnrichmentOutput, LotScores, UserAction,
+    EnrichmentOutput, LotScores, HistoricalHammer, UserAction,
 )
 target_metadata = Base.metadata
 

@@ -1,0 +1,46 @@
+# Historical hammer price scraping and prediction config
+
+scraper:
+  auctionet:
+    base_url: https://auctionet.com
+    ended_search_path: /sv/search/16-mobler
+    delay_between_requests_seconds: 3
+    max_pages_broad: 20
+    max_pages_per_designer: 5
+
+    # Designers to scrape individually for targeted historical data
+    priority_designers:
+      - "Hans Wegner"
+      - "Arne Jacobsen"
+      - "Finn Juhl"
+      - "Borge Mogensen"
+      - "Poul Kjaerholm"
+      - "Bruno Mathsson"
+      - "Verner Panton"
+      - "Niels Otto Moller"
+      - "Ingmar Relling"
+      - "Kai Kristiansen"
+      - "Ole Wanscher"
+      - "Ib Kofod-Larsen"
+      - "Alvar Aalto"
+      - "Ilmari Tapiovaara"
+      - "Charles Eames"
+      - "Poul Henningsen"
+
+prediction:
+  # Matching weights for finding historical comps
+  weights:
+    designer_match: 0.45
+    object_type_match: 0.25
+    title_similarity: 0.20
+    material_match: 0.10
+
+  # Minimum relevance to include a historical match
+  min_relevance: 0.20
+
+  # Maximum age of historical data to use (days)
+  max_age_days: 365
+
+  # Blend weights: direct hammer median vs ratio-based prediction
+  direct_weight: 0.60
+  ratio_weight: 0.40

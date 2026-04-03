@@ -50,6 +50,7 @@ class Settings:
         self.enable_image_download = os.getenv("ENABLE_IMAGE_DOWNLOAD", "true").lower() == "true"
         self.enable_enrichment = os.getenv("ENABLE_ENRICHMENT", "true").lower() == "true"
         self.enable_scheduler = os.getenv("ENABLE_SCHEDULER", "true").lower() == "true"
+        self.enable_visual_triage = os.getenv("ENABLE_VISUAL_TRIAGE", "false").lower() == "true"
 
     @property
     def snapshots_dir(self) -> Path:

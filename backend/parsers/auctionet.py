@@ -1,9 +1,11 @@
 """Parser for Auctionet.com auction pages."""
 
+import html as htmlmod
+import json
 import logging
 import re
-from datetime import datetime
-from typing import Optional
+from datetime import datetime, timezone
+from typing import Any, Optional
 
 from bs4 import BeautifulSoup
 
@@ -17,7 +19,7 @@ class AuctionetParser(BaseParser):
 
     def __init__(self):
         """Initialize Auctionet parser."""
-        super().__init__(parser_version="auctionet_v1")
+        super().__init__(parser_version="auctionet_v2")
 
     def parse(self, raw_html: str, lot_url: str) -> ParsedFields:
         """Parse Auctionet lot page HTML.
@@ -30,49 +32,70 @@ class AuctionetParser(BaseParser):
             ParsedFields object with extracted data
         """
         try:
-            soup = BeautifulSoup(raw_html, "lxml")
+            soup = BeautifulSoup(raw_html, "html.parser")
 
-            # Extract title - typically in h1 or .lot-title
+            # Extract structured bid data from React props JSON
+            item_json = self._extract_item_json(raw_html)
+
+            # Extract title from <h1>
             title = self._extract_title(soup)
 
-            # Extract description
+            # Extract subtitle from page <title> tag
+            subtitle = self._extract_subtitle(soup)
+
+            # Extract description from <h2>Description</h2> → next sibling
             description = self._extract_description(soup)
 
-            # Extract pricing information
-            current_bid = self._extract_current_bid(soup)
-            estimate_low, estimate_high = self._extract_estimates(soup)
-            currency = self._extract_currency(soup)
+            # Extract dimensions from description text
+            dimensions_text = self._extract_dimensions(description)
+
+            # Extract condition from <h2>Condition</h2> → next sibling
+            condition_text = self._extract_condition(soup)
+
+            # Extract designer from <h2>Artist/designer</h2> → next sibling
+            designer_raw = self._extract_designer_raw(soup)
+
+            # Extract pricing from JSON first, fall back to HTML scraping
+            current_bid = self._extract_current_bid_from_json(item_json) or self._extract_current_bid(soup)
+            bid_count = self._extract_bid_count(item_json)
+            hammer_price = self._extract_hammer_price(item_json)
+            sold_at = self._extract_sold_at(item_json)
+            estimate_low, estimate_high = self._extract_estimates_from_json(item_json) or self._extract_estimates(soup)
+            currency = item_json.get("currency", "EUR") if item_json else "EUR"
 
             # Extract auction timeline
-            auction_end_time = self._extract_auction_end_time(soup)
+            auction_end_time = self._extract_auction_end_time_from_json(item_json) or self._extract_auction_end_time(soup)
             time_left_text = self._extract_time_left(soup)
 
-            # Extract condition and dimensions
-            condition_text = self._extract_condition(soup)
-            dimensions_text = self._extract_dimensions(soup)
-
-            # Extract category
+            # Extract category from breadcrumbs or page title
             category_raw = self._extract_category(soup)
 
-            # Extract designer and material mentions
-            full_text = title + " " + (description or "")
+            # Extract designer and material mentions from title + description
+            full_text = (title or "") + " " + (description or "") + " " + (designer_raw or "")
             raw_designer_mentions = self._extract_designer_mentions(full_text)
-            raw_material_mentions = self._extract_material_mentions(full_text)
+            raw_material_mentions = self._extract_material_mentions(description or "")
 
             # Extract images
             image_urls = self._extract_image_urls(soup)
 
             # Extract seller/location info
             seller_location = self._extract_seller_location(soup)
+            auction_house_name = self._extract_auction_house(soup)
+
+            # Higher confidence when we have the JSON blob
+            confidence = 0.95 if item_json else 0.8
 
             return ParsedFields(
                 title=title,
-                subtitle=None,
+                subtitle=subtitle,
                 description=description,
                 category_raw=category_raw,
                 condition_text=condition_text,
                 dimensions_text=dimensions_text,
                 current_bid=current_bid,
+                bid_count=bid_count,
+                hammer_price=hammer_price,
+                sold_at=sold_at,
                 estimate_low=estimate_low,
                 estimate_high=estimate_high,
                 currency=currency,
@@ -80,86 +103,188 @@ class AuctionetParser(BaseParser):
                 time_left_text=time_left_text,
                 provenance_text=None,
                 seller_location=seller_location,
-                auction_house_name="Auctionet",
+                auction_house_name=auction_house_name,
                 raw_designer_mentions=raw_designer_mentions,
                 raw_material_mentions=raw_material_mentions,
                 image_urls=image_urls,
-                parse_confidence=0.7,  # Auctionet layout is fairly consistent
+                parse_confidence=confidence,
             )
 
         except Exception as e:
             logger.error(f"Error parsing Auctionet page {lot_url}: {e}")
             return ParsedFields(parse_confidence=0.0)
 
+    # ------------------------------------------------------------------
+    # JSON-based extractors (from data-react-props on the bid component)
+    # ------------------------------------------------------------------
+
+    def _extract_item_json(self, raw_html: str) -> Optional[dict[str, Any]]:
+        """Extract the structured item JSON from the React props attribute."""
+        for match in re.finditer(r'data-react-props="([^"]{50,})"', raw_html):
+            val = htmlmod.unescape(match.group(1))
+            try:
+                data = json.loads(val)
+                if "item" in data:
+                    return data["item"]
+            except (json.JSONDecodeError, KeyError):
+                continue
+        return None
+
+    def _extract_current_bid_from_json(self, item: Optional[dict]) -> Optional[float]:
+        """Get leading bid amount from the JSON bids array.
+
+        Bids are in reverse chronological order (newest/highest first).
+        """
+        if not item:
+            return None
+        bids = item.get("bids", [])
+        if bids:
+            return float(bids[0]["amount"])
+        return None
+
+    def _extract_bid_count(self, item: Optional[dict]) -> Optional[int]:
+        """Get number of bids from the JSON bids array."""
+        if not item:
+            return None
+        return len(item.get("bids", []))
+
+    def _extract_hammer_price(self, item: Optional[dict]) -> Optional[float]:
+        """Get final sold price. Only set when state is 'sold'.
+
+        Bids are in reverse chronological order (newest/highest first).
+        """
+        if not item or item.get("state") != "sold":
+            return None
+        bids = item.get("bids", [])
+        if bids:
+            return float(bids[0]["amount"])
+        return None
+
+    def _extract_sold_at(self, item: Optional[dict]) -> Optional[datetime]:
+        """Get sold timestamp from the last bid's time on sold lots."""
+        if not item or item.get("state") not in ("sold", "unsold"):
+            return None
+        # Use ends_at as the sold/ended timestamp
+        ends_at = item.get("ends_at")
+        if ends_at:
+            return datetime.fromtimestamp(ends_at, tz=timezone.utc)
+        return None
+
+    def _extract_estimates_from_json(self, item: Optional[dict]) -> Optional[tuple[Optional[float], Optional[float]]]:
+        """Get estimate range from JSON."""
+        if not item:
+            return None
+        estimate = item.get("estimate")
+        upper = item.get("upper_estimate")
+        if estimate is not None:
+            return (float(estimate), float(upper) if upper else float(estimate))
+        return None
+
+    def _extract_auction_end_time_from_json(self, item: Optional[dict]) -> Optional[datetime]:
+        """Get auction end time from JSON unix timestamp."""
+        if not item:
+            return None
+        ends_at = item.get("ends_at")
+        if ends_at:
+            return datetime.fromtimestamp(ends_at, tz=timezone.utc)
+        return None
+
+    def _item_state(self, raw_html: str) -> Optional[str]:
+        """Return the lot state: 'published', 'sold', or 'unsold'."""
+        item = self._extract_item_json(raw_html)
+        if item:
+            return item.get("state")
+        return None
+
     def _extract_title(self, soup: BeautifulSoup) -> Optional[str]:
-        """Extract lot title."""
-        # Try common selectors
-        title = soup.find("h1", class_="lot-title")
-        if title:
-            return title.get_text(strip=True)
+        """Extract lot title from <h1> tag."""
+        title_elem = soup.find("h1")
+        if title_elem:
+            text = title_elem.get_text(strip=True)
+            # Strip leading lot number if present (e.g., "5001970. BÖRGE MOGENSEN...")
+            text = re.sub(r"^\d+\.\s*", "", text)
+            return text if text else None
+        return None
 
-        title = soup.find("h1")
-        if title:
-            return title.get_text(strip=True)
-
-        # Fallback to og:title
-        og_title = soup.find("meta", property="og:title")
-        if og_title:
-            return og_title.get("content")
-
+    def _extract_subtitle(self, soup: BeautifulSoup) -> Optional[str]:
+        """Extract subtitle from page <title> tag."""
+        title_tag = soup.find("title")
+        if title_tag:
+            # Format is typically "TITLE. Category - Subcategory - Auctionet"
+            # Extract the subcategory part
+            text = title_tag.get_text(strip=True)
+            # Split on " - Auctionet" and take the subcategory part
+            if " - Auctionet" in text:
+                parts = text.split(" - Auctionet")[0].split(" - ")
+                if len(parts) >= 2:
+                    return parts[-1]  # Return last category part
         return None
 
     def _extract_description(self, soup: BeautifulSoup) -> Optional[str]:
-        """Extract lot description."""
-        # Try common selectors
-        desc = soup.find("div", class_="lot-description")
-        if desc:
-            return desc.get_text(strip=True)
-
-        desc = soup.find("div", class_="description")
-        if desc:
-            return desc.get_text(strip=True)
-
-        # Fallback to og:description
-        og_desc = soup.find("meta", property="og:description")
-        if og_desc:
-            return og_desc.get("content")
-
+        """Extract lot description from <h2>Description</h2> → next sibling."""
+        # Find <h2> with text "Description"
+        for h2 in soup.find_all("h2"):
+            if h2.get_text(strip=True).lower() == "description":
+                # Get the next sibling (usually a div or p)
+                next_elem = h2.find_next_sibling()
+                if next_elem:
+                    return next_elem.get_text(strip=True)
         return None
 
     def _extract_current_bid(self, soup: BeautifulSoup) -> Optional[float]:
-        """Extract current bid amount."""
-        # Look for current bid element
-        bid_elem = soup.find("span", class_=re.compile(r"current.*bid|bid.*current"))
-        if bid_elem:
-            return self._extract_price(bid_elem.get_text())
+        """Extract current bid from the bid info panel."""
+        bid_text = self._extract_bid_info_value(soup, "highest bid", "primary")
+        if bid_text:
+            if "no bids" in bid_text.lower():
+                return None
+            match = re.search(r"(\d[\d\s\xa0,.]*)\s*EUR", bid_text, re.IGNORECASE)
+            if match:
+                return self._extract_price(match.group(1).replace("\xa0", " "))
 
-        # Try generic price pattern
-        for elem in soup.find_all(["span", "div"]):
-            text = elem.get_text(strip=True)
-            if "kr" in text.lower() or "sek" in text.lower():
-                price = self._extract_price(text)
-                if price:
-                    return price
-
+        text = soup.get_text(" ", strip=True)
+        match = re.search(r"Highest bid:?\s*(\d[\d\s\xa0,.]*)\s*EUR", text, re.IGNORECASE)
+        if match:
+            return self._extract_price(match.group(1).replace("\xa0", " "))
+        if re.search(r"Highest bid:?\s*No bids", text, re.IGNORECASE):
+            return None
         return None
 
     def _extract_estimates(self, soup: BeautifulSoup) -> tuple[Optional[float], Optional[float]]:
-        """Extract estimate range."""
-        low, high = None, None
+        """Extract estimate from the bid info panel."""
+        estimate_text = self._extract_bid_info_value(soup, "highest bid", "secondary")
+        if estimate_text:
+            match = re.search(r"Estimate:?\s*(\d[\d\s\xa0,.]*)\s*EUR", estimate_text, re.IGNORECASE)
+            if match:
+                price = self._extract_price(match.group(1).replace("\xa0", " "))
+                return price, price
 
-        # Look for estimate elements
-        estimate_elem = soup.find("div", class_=re.compile(r"estimate"))
-        if estimate_elem:
-            text = estimate_elem.get_text()
-            prices = re.findall(r"[\d\s]+\s*kr", text, re.IGNORECASE)
-            if len(prices) >= 2:
-                low = self._extract_price(prices[0])
-                high = self._extract_price(prices[1])
-            elif len(prices) == 1:
-                low = self._extract_price(prices[0])
+        text = soup.get_text(" ", strip=True)
+        match = re.search(r"Estimate:?\s*(\d[\d\s\xa0,.]*)\s*EUR", text, re.IGNORECASE)
+        if match:
+            price = self._extract_price(match.group(1).replace("\xa0", " "))
+            return price, price
+        return None, None
 
-        return low, high
+    def _extract_bid_info_value(self, soup: BeautifulSoup, header_label: str, value_kind: str) -> Optional[str]:
+        """Extract a value from Auctionet's bid-info columns."""
+        value_class = {
+            "primary": ".item-page__bid-info__primary-value",
+            "secondary": ".item-page__bid-info__secondary-value",
+        }.get(value_kind)
+        if value_class is None:
+            return None
+
+        for column in soup.select(".item-page__bid-info__column"):
+            header = column.select_one(".item-page__bid-info__header")
+            if not header:
+                continue
+            header_text = header.get_text(" ", strip=True).lower()
+            if not header_text.startswith(header_label.lower()):
+                continue
+            value = column.select_one(value_class)
+            if value:
+                return value.get_text(" ", strip=True)
+        return None
 
     def _extract_price(self, text: str) -> Optional[float]:
         """Extract numeric price from text."""
@@ -173,78 +298,98 @@ class AuctionetParser(BaseParser):
         except ValueError:
             return None
 
-    def _extract_currency(self, soup: BeautifulSoup) -> Optional[str]:
-        """Extract currency code."""
-        text = soup.get_text()
-        if "kr" in text.lower() or "sek" in text.lower():
-            return "SEK"
-        if "€" in text or "eur" in text.lower():
-            return "EUR"
-        return None
 
     def _extract_auction_end_time(self, soup: BeautifulSoup) -> Optional[datetime]:
-        """Extract auction end time."""
-        # Look for datetime attribute or specific text pattern
-        for elem in soup.find_all(["span", "div"]):
-            text = elem.get_text(strip=True)
-            # Very simple pattern - real implementation would be more sophisticated
-            if "ends" in text.lower() or "closes" in text.lower():
-                # Would parse datetime here
+        """Extract auction end time from '3 Apr 2026 at 21:24 CEST' format."""
+        text = soup.get_text()
+        # Look for date pattern like "3 Apr 2026 at 21:24 CEST"
+        match = re.search(
+            r"(\d{1,2})\s+([A-Za-z]{3})\s+(\d{4})\s+at\s+(\d{1,2}):(\d{2})\s*([A-Z]{3,4})?",
+            text
+        )
+        if match:
+            day, month_str, year, hour, minute, tz = match.groups()
+            try:
+                # Parse the date
+                date_str = f"{day} {month_str} {year} {hour}:{minute}"
+                # Map month abbreviation to number
+                months = {
+                    "jan": 1, "feb": 2, "mar": 3, "apr": 4, "may": 5, "jun": 6,
+                    "jul": 7, "aug": 8, "sep": 9, "oct": 10, "nov": 11, "dec": 12
+                }
+                month_num = months.get(month_str.lower())
+                if month_num:
+                    dt = datetime(int(year), month_num, int(day), int(hour), int(minute))
+                    return dt
+            except (ValueError, KeyError):
                 pass
-
         return None
 
     def _extract_time_left(self, soup: BeautifulSoup) -> Optional[str]:
-        """Extract time remaining text."""
-        for elem in soup.find_all(["span", "div"]):
-            text = elem.get_text(strip=True)
-            if any(x in text.lower() for x in ["days", "hours", "minutes", "left", "remaining"]):
-                return text
-
+        """Extract time remaining text like '7 days' or '21 hours'."""
+        text = soup.get_text()
+        # Look for patterns like "9 days", "7 days", "21 hours"
+        match = re.search(r"(\d+\s+(?:days?|hours?|minutes?))", text, re.IGNORECASE)
+        if match:
+            return match.group(1)
         return None
 
     def _extract_condition(self, soup: BeautifulSoup) -> Optional[str]:
-        """Extract condition information."""
-        # Look for condition-specific elements
-        cond = soup.find("div", class_=re.compile(r"condition"))
-        if cond:
-            return cond.get_text(strip=True)
-
+        """Extract condition from <h2>Condition</h2> → next sibling."""
+        # Find <h2> with text "Condition"
+        for h2 in soup.find_all("h2"):
+            if h2.get_text(strip=True).lower() == "condition":
+                # Get the next sibling (usually a p tag)
+                next_elem = h2.find_next_sibling()
+                if next_elem:
+                    return next_elem.get_text(strip=True)
         return None
 
-    def _extract_dimensions(self, soup: BeautifulSoup) -> Optional[str]:
-        """Extract dimensions."""
-        # Look for dimension patterns in text
-        text = soup.get_text()
-        matches = re.findall(r"(\d+\s*x\s*\d+\s*x?\s*\d*\s*(?:cm|mm|in|inches)?)", text)
-        if matches:
-            return matches[0]
-
+    def _extract_dimensions(self, text: Optional[str]) -> Optional[str]:
+        """Extract dimensions from description text (e.g., 'Length 158, depth 81, height 76 cm')."""
+        if not text:
+            return None
+        # Look for dimension patterns like "Length 158, depth 81, height 76 cm"
+        # or "Height 68, seat height 46, width 52 cm"
+        match = re.search(
+            r"((?:Length|Height|Width|Depth|Seat height|Diameter).*?(?:cm|mm|inches?))",
+            text,
+            re.IGNORECASE
+        )
+        if match:
+            return match.group(1)
         return None
 
     def _extract_category(self, soup: BeautifulSoup) -> Optional[str]:
-        """Extract category."""
-        # Look for breadcrumb or category element
-        breadcrumb = soup.find("div", class_=re.compile(r"breadcrumb|category"))
-        if breadcrumb:
-            return breadcrumb.get_text(strip=True)
-
-        return "furniture"  # Default for initial MVP
+        """Extract category from page title (format: 'Title. MainCat - SubCat - Auctionet')."""
+        title_tag = soup.find("title")
+        if title_tag:
+            text = title_tag.get_text(strip=True)
+            if " - Auctionet" in text:
+                before = text.split(" - Auctionet")[0]
+                parts = before.split(" - ")
+                if len(parts) >= 2:
+                    # First part is "Lot Title. MainCategory", rest are subcategories
+                    main_part = parts[0]
+                    # Extract main category after last ". "
+                    dot_idx = main_part.rfind(". ")
+                    main_cat = main_part[dot_idx + 2:].strip() if dot_idx >= 0 else None
+                    sub_cats = [p.strip() for p in parts[1:] if p.strip()]
+                    cats = ([main_cat] if main_cat else []) + sub_cats
+                    if cats:
+                        return " > ".join(cats)
+        return None
 
     def _extract_designer_mentions(self, text: str) -> list[str]:
-        """Extract potential designer names from text."""
+        """Extract designer names from text (e.g., 'Poul Henningsen (1894–1967)')."""
         mentions = []
 
-        # Common designer name patterns (simple regex - real impl would be more sophisticated)
-        # Look for capitalized words that might be names
-        potential_names = re.findall(r"\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)\b", text)
+        # Look for pattern: "Name (YYYY–YYYY)" or "Name (YYYY-YYYY)"
+        designer_pattern = r"\b([A-Z][a-zà-öø-ÿ]+(?:\s+[A-Z][a-zà-öø-ÿ]+)+)\s+\(\d{4}[–-]\d{4}\)"
+        matches = re.findall(designer_pattern, text)
+        mentions.extend(matches)
 
-        # Filter for name-like patterns (2-3 words, specific lengths)
-        for name in potential_names:
-            if 2 < len(name) < 30 and name.count(" ") <= 1:
-                mentions.append(name)
-
-        return list(set(mentions))[:5]  # Return top 5 unique mentions
+        return list(dict.fromkeys(mentions))[:10]
 
     def _extract_material_mentions(self, text: str) -> list[str]:
         """Extract material mentions from text."""
@@ -266,28 +411,64 @@ class AuctionetParser(BaseParser):
         return [m.lower() for m in list(set(materials))]
 
     def _extract_image_urls(self, soup: BeautifulSoup) -> list[str]:
-        """Extract image URLs."""
+        """Extract the main gallery image URLs with 'large_' prefix."""
         urls = []
 
-        # Look for images in gallery
-        for img in soup.find_all("img", class_=re.compile(r"lot|gallery|image")):
+        for img in soup.select(".item-page__images img.test-item-image"):
             src = img.get("src")
-            if src and "data:" not in src:
-                urls.append(src)
+            data_pin_media = img.get("data-pin-media")
+            candidate = src or data_pin_media
+            if not candidate or "item_" not in candidate or "data:" in candidate:
+                continue
+            large_src = (
+                candidate
+                .replace("/uploads/item_", "/thumbs/large_item_")
+                .replace("medium_", "large_")
+                .replace("thumb_", "large_")
+                .replace("mini_", "large_")
+            )
+            urls.append(large_src)
 
-        # Also check for og:image
         og_image = soup.find("meta", property="og:image")
         if og_image:
-            urls.insert(0, og_image.get("content"))
+            content = og_image.get("content")
+            if content:
+                urls.insert(0, content.replace("medium_", "large_").replace("mini_", "large_"))
 
-        # Return unique URLs
         return list(dict.fromkeys(urls))
 
     def _extract_seller_location(self, soup: BeautifulSoup) -> Optional[str]:
-        """Extract seller location."""
-        # Look for seller or location information
-        seller = soup.find("div", class_=re.compile(r"seller|location|address"))
-        if seller:
-            return seller.get_text(strip=True)
+        """Extract seller location from 'Item is located in X' in HTML."""
+        # Search raw HTML to avoid get_text() bleeding adjacent elements together
+        html_str = str(soup)
+        match = re.search(r"Item is located in\s+([^<]+)", html_str, re.IGNORECASE)
+        if match:
+            return match.group(1).strip()
+        return None
 
+    def _extract_auction_house(self, soup: BeautifulSoup) -> Optional[str]:
+        """Extract auction house name from logo alt text in header-and-logo section."""
+        logo_div = soup.find(class_="header-and-logo__logo")
+        if logo_div:
+            img = logo_div.find("img")
+            if img and img.get("alt"):
+                return img["alt"].strip()
+        # Fallback: look for company link in header area
+        company_link = soup.find("a", href=re.compile(r"company_id="))
+        if company_link:
+            img = company_link.find("img")
+            if img and img.get("alt"):
+                return img["alt"].strip()
+        return None
+
+    def _extract_designer_raw(self, soup: BeautifulSoup) -> Optional[str]:
+        """Extract designer info from <h2>Artist/designer</h2> → next sibling."""
+        # Find <h2> with text "Artist/designer"
+        for h2 in soup.find_all("h2"):
+            h2_text = h2.get_text(strip=True).lower()
+            if "artist" in h2_text or "designer" in h2_text:
+                # Get the next sibling (usually a p tag)
+                next_elem = h2.find_next_sibling()
+                if next_elem:
+                    return next_elem.get_text(strip=True)
         return None

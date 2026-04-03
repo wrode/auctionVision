@@ -1,7 +1,7 @@
 arbitrage:
   weights:
     price_gap: 0.40
-    norway_premium: 0.20
+    resale_premium: 0.20
     attribution_confidence: 0.15
     condition: 0.10
     liquidity: 0.10
@@ -25,14 +25,46 @@ wildcard:
     provenance_interest: 0.10
     manual_curator_boost: 0.10
 
+filters:
+  # Minimum resale price target (SEK). Items must be sellable for at least this.
+  min_sale_price_sek: 6000
+  # Minimum auction estimate to bother fetching/parsing (SEK).
+  # Auction prices are lower than resale — 2000 SEK filters out junk.
+  min_estimate_sek: 2000
+  # EUR→SEK conversion for filtering (Auctionet lists in EUR)
+  eur_to_sek_rate: 11.49
+  # Resale multiplier: expected_resale / total_acquisition_cost
+  # 2x = minimum to pursue, 3x = strong opportunity
+  min_resale_multiplier: 2.0
+  preferred_resale_multiplier: 3.0
+
 thresholds:
   best_buys_min_arbitrage: 0.6
   best_buys_min_confidence: 0.4
-  norway_arb_min_gap_score: 0.5
+  resale_arb_min_score: 0.5
   taste_min_score: 0.5
   wildcard_min_score: 0.6
   ending_soon_hours: 4
   ending_soon_min_score: 0.4
+
+pre_filter:
+  # Score lots from URL slug before fetching detail pages.
+  # Saves ~60% of enrichment costs by skipping low-signal lots.
+  #   score >= 3 → auto-fetch + enrich (designer + material signal, 69% hit rate)
+  #   score 0-2  → fetch detail, gate enrichment behind Haiku triage
+  #   score < 0  → skip entirely (anti-signals: contemporary, rococo, etc.)
+  #
+  # CLI usage:
+  #   --cream         → min_score=3 (designer-only, highest ROI)
+  #   --min-score=0   → default (skip only anti-signal lots)
+  #   --min-score=2   → moderate filter
+  default_min_score: 0
+
+visual_triage:
+  model: "claude-haiku-4-5-20251001"
+  max_tokens: 100
+  max_calls_per_run: 50
+  throttle_seconds: 0.5
 
 urgency:
   hours_remaining_buckets:

@@ -1,95 +1,129 @@
 export interface LotCard {
-  id: string;
+  id: number;
   title: string;
-  current_bid?: number;
-  estimate_min?: number;
-  estimate_max?: number;
-  auction_end_time?: string;
-  image_url?: string;
+  current_bid?: number | null;
+  current_bid_updated_at?: string | null;
+  bid_count?: number | null;
+  estimate_low?: number | null;
+  estimate_high?: number | null;
+  currency?: string;
+  auction_end_time?: string | null;
+  time_remaining?: string | null;
+  image_url?: string | null;
   source: string;
-  source_url?: string;
-  arbitrage_score?: number;
-  norway_gap_score?: number;
-  taste_score?: number;
-  wildcard_score?: number;
-  taste_category?: 'core' | 'adjacent' | 'exploratory';
+  lot_url?: string | null;
+  labels?: string[];
+  scores: {
+    arbitrage?: number | null;
+    taste?: number | null;
+    wildcard?: number | null;
+    urgency?: number | null;
+    demand?: number | null;
+  };
+  ai_value_low?: number | null;
+  ai_value_high?: number | null;
+  ai_value_basis?: string | null;
+  estimate_confidence?: string | null;
+  estimate_basis?: Array<{source: string; platform?: string; detail: string; url?: string | null; price_eur: number}> | null;
+  enrichment_version?: string | null;
+  best_market?: string | null;
+  best_market_reasoning?: string | null;
+  buyer_profile?: { who_buys?: string; sell_where?: string; demand_level?: string } | null;
+  listing?: { resale_title?: string; resale_description?: string; tags?: string[] } | null;
+  inspection_checklist?: string[] | null;
+  conviction?: string | null;
+  seller_location?: string | null;
+  landed_cost_eur?: number | null;
+  expected_resale_eur?: number | null;
+  predicted_hammer_eur?: number | null;
+  max_bid_eur?: number | null;
+  hammer_prediction_method?: string | null;
+  demand_summary?: string | null;
+  demand_detail?: Record<string, any> | null;
+  rationale?: string | null;
   risk_flags?: string[];
-  rationale?: string;
-  watched?: boolean;
-  archived?: boolean;
+  user_actions?: string[];
 }
 
-export interface LotDetail extends LotCard {
-  description?: string;
-  condition?: string;
-  lot_number?: string;
-  hammer_price?: number;
-  buyer_premium?: number;
-  shipping_cost?: number;
-  total_cost?: number;
-  dimensions?: {
-    height?: number;
-    width?: number;
-    depth?: number;
-    unit?: string;
-  };
-  material?: string;
-  artist?: string;
-  provenance?: string;
-  authenticity?: string;
-  normalized_fields?: Record<string, any>;
-  agent_enrichment?: EnrichmentOutput[];
-  score_breakdown?: LotScores;
-  fetch_history?: FetchRecord[];
-  user_actions?: UserAction[];
-  gallery_images?: string[];
-}
-
-export interface LotScores {
-  arbitrage_score?: {
-    value: number;
-    rationale: string;
-  };
-  norway_gap_score?: {
-    value: number;
-    rationale: string;
-    gap_pct?: number;
-  };
-  taste_score?: {
-    value: number;
-    rationale: string;
-    category?: string;
-  };
-  wildcard_score?: {
-    value: number;
-    rationale: string;
-  };
+export interface ParsedFields {
+  parser_version: string;
+  title?: string | null;
+  subtitle?: string | null;
+  description?: string | null;
+  category_raw?: string | null;
+  condition_text?: string | null;
+  dimensions_text?: string | null;
+  current_bid?: number | null;
+  estimate_low?: number | null;
+  estimate_high?: number | null;
+  currency?: string | null;
+  auction_end_time?: string | null;
+  time_left_text?: string | null;
+  provenance_text?: string | null;
+  seller_location?: string | null;
+  auction_house_name?: string | null;
+  raw_designer_mentions?: string[] | null;
+  raw_material_mentions?: string[] | null;
+  parse_confidence: number;
 }
 
 export interface EnrichmentOutput {
-  agent: string;
-  output: string;
-  timestamp?: string;
+  agent_name: string;
+  agent_version: string;
+  output_json: Record<string, any>;
+  confidence?: number | null;
+  completed_at?: string | null;
 }
 
 export interface FetchRecord {
-  timestamp: string;
-  action: string;
-  details?: string;
+  fetched_at: string;
+  fetch_type: string;
+  http_status?: number | null;
+  success: boolean;
+  error_message?: string | null;
 }
 
-export interface UserAction {
-  action: 'star' | 'skip' | 'watch' | 'archive' | 'note';
-  timestamp: string;
-  value?: string;
+export interface LotImage {
+  url: string;
+  local_path?: string | null;
+  sort_order: number;
+}
+
+export interface LotDetail extends LotCard {
+  parsed_fields?: ParsedFields | null;
+  normalized_fields?: Record<string, any> | null;
+  enrichments?: EnrichmentOutput[];
+  fetch_history?: FetchRecord[];
+  images?: LotImage[];
+  notes?: string | null;
 }
 
 export interface ViewResponse {
   view_name: string;
   lots: LotCard[];
-  lot_count: number;
-  last_refreshed: string;
+  total: number;
   filters?: Record<string, any>;
+}
+
+export interface WantedListingCard {
+  id: number;
+  finn_id: string;
+  url: string;
+  title: string;
+  offered_price?: number | null;
+  currency: string;
+  brand?: string | null;
+  designer?: string | null;
+  category?: string | null;
+  buyer_location?: string | null;
+  image_urls?: string[] | null;
+  published_text?: string | null;
+  match_reason?: string | null;
+}
+
+export interface WantedViewResponse {
+  listings: WantedListingCard[];
+  total: number;
 }
 
 export interface FetchParams {

@@ -7,7 +7,7 @@ name = "auction-vision"
 version = "0.1.0"
 description = "Local auction sourcing engine MVP"
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.10"
 license = {text = "MIT"}
 authors = [
     {name = "Auction Vision Team"}
@@ -41,14 +41,14 @@ packages = ["backend"]
 
 [tool.black]
 line-length = 100
-target-version = ["py311"]
+target-version = ["py310"]
 
 [tool.ruff]
 line-length = 100
-target-version = "py311"
+target-version = "py310"
 
 [tool.mypy]
-python_version = "3.11"
+python_version = "3.10"
 strict = false
 disallow_untyped_defs = false
 warn_unused_ignores = true

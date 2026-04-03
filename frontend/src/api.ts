@@ -2,6 +2,7 @@ import {
   LotCard,
   LotDetail,
   ViewResponse,
+  WantedViewResponse,
   FetchParams,
   ActionPayload,
   JobRequest,
@@ -71,6 +72,10 @@ class APIClient {
       : `/views/${viewName}`;
 
     return this.request<ViewResponse>(endpoint);
+  }
+
+  async fetchWanted(limit: number = 100): Promise<WantedViewResponse> {
+    return this.request<WantedViewResponse>(`/views/wanted?limit=${limit}`);
   }
 
   async postAction(

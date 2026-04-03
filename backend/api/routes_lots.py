@@ -23,12 +23,82 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
+def _build_demand_summary(explanation_json: dict | None) -> str | None:
+    """Build a human-readable demand summary from scoring explanation."""
+    if not explanation_json:
+        return None
+    demand = explanation_json.get("demand_matches")
+    if not demand:
+        return None
+
+    parts = []
+    methods = demand.get("combined_method", [])
+
+    # Finn wanted signal
+    finn_matches = demand.get("finn_matches", [])
+    if finn_matches and isinstance(finn_matches, list):
+        first = finn_matches[0] if finn_matches else {}
+        mt = first.get("match_type", "")
+        if mt == "category_demand":
+            cat = first.get("category", "")
+            count = first.get("wanted_count", 0)
+            parts.append(f"{count} wanted in {cat}")
+        elif mt in ("designer", "keyword"):
+            n = len(finn_matches)
+            val = first.get("match_value", "")
+            parts.append(f"{n} buyer{'s' if n > 1 else ''} ({val})")
+
+    # Supply / resale confidence signal
+    supply = demand.get("resale_confidence", {}) or demand.get("finn_supply", {})
+    if supply:
+        smt = supply.get("match_type", "")
+        if smt in ("designer", "brand"):
+            median = supply.get("median_price_nok")
+            count = supply.get("listing_count", 0)
+            churn = supply.get("churn_rate")
+            if median:
+                part = f"{count} listed, {int(median):,} NOK median"
+                if churn and churn > 0.1:
+                    part += f", {int(churn*100)}% turnover"
+                parts.append(part)
+        elif smt == "general_benchmark":
+            parts.append("general market")
+
+    # Historical
+    hist = demand.get("historical", {})
+    if hist and hist.get("record_count", 0) >= 5:
+        st = hist.get("sell_through_rate")
+        if st is not None:
+            parts.append(f"{int(st * 100)}% sell-through")
+
+    return " · ".join(parts) if parts else None
+
+
 def _build_lot_card(lot: Lot, db: Session) -> LotCard:
     """Build a LotCard from a Lot model."""
     # Get latest parsed fields
     parsed = db.query(ParsedLotFields).filter(
         ParsedLotFields.lot_id == lot.id
     ).order_by(ParsedLotFields.created_at.desc()).first()
+
+    fallback_bid = None
+    current_bid = parsed.current_bid if parsed else None
+    current_bid_updated_at = parsed.created_at if parsed else None
+    bid_count = parsed.bid_count if parsed else None
+    if parsed and parsed.current_bid is None:
+        fallback_bid = db.query(
+            ParsedLotFields.current_bid,
+            ParsedLotFields.bid_count,
+            ParsedLotFields.created_at,
+        ).filter(
+            ParsedLotFields.lot_id == lot.id,
+            ParsedLotFields.current_bid.isnot(None),
+            ParsedLotFields.current_bid > 0,
+        ).order_by(ParsedLotFields.created_at.desc()).first()
+        if fallback_bid:
+            current_bid = fallback_bid[0]
+            bid_count = fallback_bid[1]
+            current_bid_updated_at = fallback_bid[2]
 
     # Get scores
     scores_record = db.query(LotScores).filter(LotScores.lot_id == lot.id).first()
@@ -41,15 +111,18 @@ def _build_lot_card(lot: Lot, db: Session) -> LotCard:
     # Get first image
     image_url = None
     if lot.images:
-        image_url = lot.images[0].image_url
+        image_url = sorted(lot.images, key=lambda img: img.sort_order or 0)[0].image_url
 
     # Build card
     return LotCard(
         id=lot.id,
         title=parsed.title if parsed else lot.canonical_title or "Unknown",
         source=lot.source.name if lot.source else "unknown",
+        lot_url=lot.lot_url,
         image_url=image_url,
-        current_bid=parsed.current_bid if parsed else None,
+        current_bid=current_bid,
+        current_bid_updated_at=current_bid_updated_at,
+        bid_count=bid_count,
         estimate_low=parsed.estimate_low if parsed else None,
         estimate_high=parsed.estimate_high if parsed else None,
         currency=parsed.currency if parsed else None,
@@ -60,7 +133,30 @@ def _build_lot_card(lot: Lot, db: Session) -> LotCard:
             "taste": scores_record.taste_score if scores_record else None,
             "wildcard": scores_record.wildcard_score if scores_record else None,
             "urgency": scores_record.urgency_score if scores_record else None,
+            "demand": scores_record.demand_score if scores_record else None,
         },
+        ai_value_low=scores_record.explanation_json.get("ai_value_low") if scores_record and scores_record.explanation_json else None,
+        ai_value_high=scores_record.explanation_json.get("ai_value_high") if scores_record and scores_record.explanation_json else None,
+        ai_value_basis=scores_record.explanation_json.get("ai_value_basis") if scores_record and scores_record.explanation_json else None,
+        landed_cost_eur=scores_record.explanation_json.get("landed_cost_estimate") if scores_record and scores_record.explanation_json else None,
+        expected_resale_eur=scores_record.explanation_json.get("expected_resale_value") if scores_record and scores_record.explanation_json else None,
+        predicted_hammer_eur=scores_record.explanation_json.get("hammer_prediction", {}).get("predicted") if scores_record and scores_record.explanation_json and scores_record.explanation_json.get("hammer_prediction") else None,
+        max_bid_eur=scores_record.explanation_json.get("max_bid_eur") if scores_record and scores_record.explanation_json else None,
+        hammer_prediction_method=scores_record.explanation_json.get("hammer_prediction", {}).get("method") if scores_record and scores_record.explanation_json and scores_record.explanation_json.get("hammer_prediction") else None,
+        estimate_confidence=scores_record.explanation_json.get("estimate_confidence") if scores_record and scores_record.explanation_json else None,
+        estimate_basis=scores_record.explanation_json.get("estimate_basis") if scores_record and scores_record.explanation_json else None,
+        enrichment_version=scores_record.explanation_json.get("enrichment_version") if scores_record and scores_record.explanation_json else None,
+        best_market=scores_record.explanation_json.get("best_market") if scores_record and scores_record.explanation_json else None,
+        best_market_reasoning=scores_record.explanation_json.get("best_market_reasoning") if scores_record and scores_record.explanation_json else None,
+        buyer_profile=scores_record.explanation_json.get("buyer_profile") if scores_record and scores_record.explanation_json else None,
+        listing=scores_record.explanation_json.get("listing") if scores_record and scores_record.explanation_json else None,
+        inspection_checklist=scores_record.explanation_json.get("inspection_checklist") if scores_record and scores_record.explanation_json else None,
+        conviction=scores_record.explanation_json.get("conviction") if scores_record and scores_record.explanation_json else None,
+        comparables_count=scores_record.explanation_json.get("comparables_count") if scores_record and scores_record.explanation_json else None,
+        retail_new_price=scores_record.explanation_json.get("retail_new_price") if scores_record and scores_record.explanation_json else None,
+        seller_location=parsed.seller_location if parsed else None,
+        demand_summary=_build_demand_summary(scores_record.explanation_json) if scores_record else None,
+        demand_detail=scores_record.explanation_json.get("demand_matches") if scores_record and scores_record.explanation_json else None,
         user_actions=[a.action_type for a in user_actions_records],
     )
 
@@ -68,8 +164,9 @@ def _build_lot_card(lot: Lot, db: Session) -> LotCard:
 def _build_lot_detail(lot: Lot, db: Session) -> LotDetail:
     """Build a LotDetail from a Lot model."""
     card = _build_lot_card(lot, db)
-    detail = LotDetail(**card.model_dump())
-    detail.lot_url = lot.lot_url
+    card_data = card.model_dump()
+    card_data["lot_url"] = lot.lot_url or ""
+    detail = LotDetail(**card_data)
 
     # Get parsed fields
     parsed = db.query(ParsedLotFields).filter(
@@ -77,6 +174,15 @@ def _build_lot_detail(lot: Lot, db: Session) -> LotDetail:
     ).order_by(ParsedLotFields.created_at.desc()).first()
 
     if parsed:
+        import json as _json
+        def _parse_json_field(val):
+            if isinstance(val, str):
+                try:
+                    return _json.loads(val)
+                except (ValueError, TypeError):
+                    return [val] if val else []
+            return val or []
+
         detail.parsed_fields = ParsedFieldsDetail(
             parser_version=parsed.parser_version,
             title=parsed.title,
@@ -94,8 +200,8 @@ def _build_lot_detail(lot: Lot, db: Session) -> LotDetail:
             provenance_text=parsed.provenance_text,
             seller_location=parsed.seller_location,
             auction_house_name=parsed.auction_house_name,
-            raw_designer_mentions=parsed.raw_designer_mentions,
-            raw_material_mentions=parsed.raw_material_mentions,
+            raw_designer_mentions=_parse_json_field(parsed.raw_designer_mentions),
+            raw_material_mentions=_parse_json_field(parsed.raw_material_mentions),
             parse_confidence=parsed.parse_confidence,
         )
 

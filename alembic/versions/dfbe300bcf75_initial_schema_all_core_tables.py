@@ -138,7 +138,7 @@ def upgrade() -> None:
     sa.Column('lot_id', sa.Integer(), nullable=False),
     sa.Column('scoring_version', sa.String(length=50), nullable=False),
     sa.Column('arbitrage_score', sa.Float(), nullable=True),
-    sa.Column('norway_gap_score', sa.Float(), nullable=True),
+    sa.Column('resale_arb_score', sa.Float(), nullable=True),
     sa.Column('taste_score', sa.Float(), nullable=True),
     sa.Column('wildcard_score', sa.Float(), nullable=True),
     sa.Column('urgency_score', sa.Float(), nullable=True),
@@ -151,7 +151,7 @@ def upgrade() -> None:
     sa.UniqueConstraint('lot_id')
     )
     op.create_index('idx_scores_arbitrage', 'lot_scores', ['arbitrage_score'], unique=False)
-    op.create_index('idx_scores_norway_gap', 'lot_scores', ['norway_gap_score'], unique=False)
+    op.create_index('idx_scores_resale_arb', 'lot_scores', ['resale_arb_score'], unique=False)
     op.create_index('idx_scores_overall_watch', 'lot_scores', ['overall_watch_score'], unique=False)
     op.create_index('idx_scores_taste', 'lot_scores', ['taste_score'], unique=False)
     op.create_index('idx_scores_wildcard', 'lot_scores', ['wildcard_score'], unique=False)
@@ -248,7 +248,7 @@ def downgrade() -> None:
     op.drop_index('idx_scores_wildcard', table_name='lot_scores')
     op.drop_index('idx_scores_taste', table_name='lot_scores')
     op.drop_index('idx_scores_overall_watch', table_name='lot_scores')
-    op.drop_index('idx_scores_norway_gap', table_name='lot_scores')
+    op.drop_index('idx_scores_resale_arb', table_name='lot_scores')
     op.drop_index('idx_scores_arbitrage', table_name='lot_scores')
     op.drop_table('lot_scores')
     op.drop_index('idx_lot_image_lot_id', table_name='lot_images')

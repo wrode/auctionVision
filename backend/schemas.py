@@ -13,8 +13,11 @@ class LotCard(BaseModel):
     id: int
     title: str
     source: str
+    lot_url: Optional[str] = None
     image_url: Optional[str] = None
     current_bid: Optional[float] = None
+    current_bid_updated_at: Optional[datetime] = None
+    bid_count: Optional[int] = None
     estimate_low: Optional[float] = None
     estimate_high: Optional[float] = None
     currency: Optional[str] = None
@@ -22,6 +25,28 @@ class LotCard(BaseModel):
     time_remaining: Optional[str] = None
     labels: list[str] = Field(default_factory=list)
     scores: dict[str, Optional[float]] = Field(default_factory=dict)
+    ai_value_low: Optional[float] = None
+    ai_value_high: Optional[float] = None
+    ai_value_basis: Optional[str] = None
+    landed_cost_eur: Optional[float] = None
+    expected_resale_eur: Optional[float] = None
+    predicted_hammer_eur: Optional[float] = None
+    max_bid_eur: Optional[float] = None
+    hammer_prediction_method: Optional[str] = None
+    estimate_confidence: Optional[str] = None
+    estimate_basis: Optional[list[dict]] = None
+    enrichment_version: Optional[str] = None
+    best_market: Optional[str] = None
+    best_market_reasoning: Optional[str] = None
+    buyer_profile: Optional[dict] = None
+    listing: Optional[dict] = None
+    inspection_checklist: Optional[list[str]] = None
+    conviction: Optional[str] = None
+    comparables_count: Optional[int] = None
+    retail_new_price: Optional[float] = None
+    seller_location: Optional[str] = None
+    demand_summary: Optional[str] = None
+    demand_detail: Optional[dict] = None
     rationale: Optional[str] = None
     risk_flags: list[str] = Field(default_factory=list)
     user_actions: list[str] = Field(default_factory=list)
@@ -155,17 +180,34 @@ class AttributionOutput(BaseModel):
         from_attributes = True
 
 
+class HammerPredictionDetail(BaseModel):
+    """Hammer price prediction from historical Auctionet data (buy-side)."""
+
+    predicted: Optional[float] = None
+    low: Optional[float] = None
+    high: Optional[float] = None
+    confidence: Optional[float] = None
+    method: Optional[str] = None  # historical_match, ratio_adjusted, estimate_fallback
+    num_historical_matches: Optional[int] = None
+    estimate_to_hammer_ratio: Optional[float] = None
+
+    class Config:
+        from_attributes = True
+
+
 class ArbitrageOutput(BaseModel):
     """Arbitrage scoring enrichment output."""
 
     fair_value_range: Optional[dict[str, float]] = None
-    expected_norway_value: Optional[float] = None
+    expected_resale_value: Optional[float] = None
     landed_cost_estimate: Optional[float] = None
     estimated_margin_range: Optional[dict[str, float]] = None
     arbitrage_score: Optional[float] = None
     confidence: Optional[float] = None
     reasons: list[str] = Field(default_factory=list)
     risks: list[str] = Field(default_factory=list)
+    hammer_prediction: Optional[HammerPredictionDetail] = None
+    max_bid_eur: Optional[float] = None
 
     class Config:
         from_attributes = True
@@ -193,6 +235,38 @@ class WildcardOutput(BaseModel):
     distinctiveness_score: Optional[float] = None
     reasons: list[str] = Field(default_factory=list)
     risks: list[str] = Field(default_factory=list)
+
+    class Config:
+        from_attributes = True
+
+
+# === Wanted Listings ===
+class WantedListingCard(BaseModel):
+    """Summary of a Finn wanted listing."""
+
+    id: int
+    finn_id: str
+    url: str
+    title: str
+    offered_price: Optional[float] = None
+    currency: str = "NOK"
+    brand: Optional[str] = None
+    designer: Optional[str] = None
+    category: Optional[str] = None
+    buyer_location: Optional[str] = None
+    image_urls: Optional[list[str]] = None
+    published_text: Optional[str] = None
+    match_reason: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
+class WantedViewResponse(BaseModel):
+    """Response for wanted listings view."""
+
+    listings: list[WantedListingCard]
+    total: int
 
     class Config:
         from_attributes = True

@@ -6,7 +6,7 @@ import { TimeRemaining } from '../components/TimeRemaining';
 
 export const EndingSoon = () => {
   const [viewData] = createResource(() =>
-    apiClient.fetchView('ending_soon', { limit: 100, sort_by: 'auction_end_time' }),
+    apiClient.fetchView('ending-soon', { limit: 100 }),
   );
 
   const handleRefresh = async () => {
@@ -21,8 +21,8 @@ export const EndingSoon = () => {
     <>
       <ViewHeader
         title="Ending Soon"
-        lotCount={viewData()?.lot_count}
-        lastRefreshed={viewData()?.last_refreshed}
+        lotCount={viewData()?.total}
+        lastRefreshed={viewData()?.filters?.last_refreshed}
         onRefresh={handleRefresh}
         loading={viewData.loading}
       />
@@ -35,7 +35,7 @@ export const EndingSoon = () => {
                   <div class="lot-list-item">
                     <Show when={lot.image_url}>
                       <img
-                        src={lot.image_url}
+                        src={lot.image_url!}
                         alt={lot.title}
                         style="width: 120px; height: 120px; object-fit: cover; border-radius: var(--radius-md); flex-shrink: 0;"
                       />
@@ -52,12 +52,12 @@ export const EndingSoon = () => {
                             </Show>
                           </div>
                         </div>
-                        <Show when={lot.estimate_min || lot.estimate_max}>
+                        <Show when={lot.estimate_low || lot.estimate_high}>
                           <div>
-                            <span style="color: var(--text-secondary); font-size: 0.8rem; text-transform: uppercase;">Estimate</span>
+                            <span style="color: var(--text-secondary); font-size: 0.8rem; text-transform: uppercase;">Auc. Est.</span>
                             <div style="color: var(--text-primary);">
-                              ${lot.estimate_min?.toLocaleString()} - $
-                              {lot.estimate_max?.toLocaleString()}
+                              ${lot.estimate_low?.toLocaleString()} - $
+                              {lot.estimate_high?.toLocaleString()}
                             </div>
                           </div>
                         </Show>
@@ -71,7 +71,7 @@ export const EndingSoon = () => {
 
                     <div style="display: flex; flex-direction: column; align-items: flex-end; justify-content: center; gap: var(--spacing-md); min-width: 150px;">
                       <div style="text-align: center;">
-                        <TimeRemaining endTime={lot.auction_end_time} showText={true} />
+                        <TimeRemaining endTime={lot.auction_end_time ?? undefined} showText={true} />
                       </div>
                       <Show when={lot.source}>
                         <span style="font-size: 0.75rem; background-color: var(--bg-secondary); color: var(--text-secondary); padding: 0.25rem 0.5rem; border-radius: var(--radius-sm); text-transform: uppercase; letter-spacing: 0.5px;">

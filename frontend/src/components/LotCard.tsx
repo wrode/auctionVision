@@ -1,9 +1,7 @@
-import { Show, For } from 'solid-js';
+import { Show } from 'solid-js';
 import { useNavigate } from '@solidjs/router';
 import { LotCard as LotCardType } from '../types';
 import { ScoreBadge } from './ScoreBadge';
-import { TimeRemaining } from './TimeRemaining';
-import { ActionBar } from './ActionBar';
 
 interface LotCardProps {
   lot: LotCardType;
@@ -12,96 +10,73 @@ interface LotCardProps {
 
 export const LotCard = (props: LotCardProps) => {
   const navigate = useNavigate();
-
-  const handleCardClick = () => {
-    navigate(`/lots/${props.lot.id}`);
-  };
-
-  const handleActionClick = (e: MouseEvent) => {
-    e.stopPropagation();
-  };
+  const handleCardClick = () => navigate(`/lots/${props.lot.id}`);
+  const scores = () => props.lot.scores || {};
 
   return (
     <div class="lot-card" onclick={handleCardClick}>
-      <Show when={props.lot.image_url} fallback={<div class="lot-card-image" style="display: flex; align-items: center; justify-content: center; color: var(--text-secondary);">No image</div>}>
-        <img
-          src={props.lot.image_url}
-          alt={props.lot.title}
-          class="lot-card-image"
-          loading="lazy"
-        />
+      <Show when={props.lot.image_url} fallback={
+        <div class="lot-card-image" style="display: flex; align-items: center; justify-content: center; color: var(--text-secondary); background: var(--bg-secondary); min-height: 180px;">
+          No image
+        </div>
+      }>
+        <img src={props.lot.image_url!} alt={props.lot.title} class="lot-card-image" loading="lazy" />
       </Show>
 
       <div class="lot-card-content">
         <h3 class="lot-card-title">{props.lot.title}</h3>
 
-        <div class="lot-card-source">{props.lot.source}</div>
-
-        <div class="lot-card-bid-info">
-          <div class="current-bid">
-            <span class="bid-label">Current Bid</span>
-            <Show when={props.lot.current_bid} fallback={<span class="bid-value">—</span>}>
-              <span class="bid-value">
-                ${props.lot.current_bid?.toLocaleString()}
-              </span>
-            </Show>
+        <div class="lot-card-prices">
+          <div class="price-row">
+            <span class="price-label">Auc. Est.</span>
+            <span class="price-value">
+              {props.lot.estimate_low ? `${props.lot.estimate_low.toLocaleString()} ${props.lot.currency || 'EUR'}` : '\u2014'}
+            </span>
           </div>
-          <Show when={props.lot.estimate_min && props.lot.estimate_max}>
-            <div class="estimate">
-              Est: ${props.lot.estimate_min?.toLocaleString()} - $
-              {props.lot.estimate_max?.toLocaleString()}
+          <Show when={props.lot.current_bid}>
+            <div class="price-row">
+              <span class="price-label">Current Bid</span>
+              <span class="price-value bid-active">
+                {props.lot.current_bid!.toLocaleString()} {props.lot.currency || 'EUR'}
+              </span>
+            </div>
+          </Show>
+          <Show when={props.lot.ai_value_low}>
+            <div class="price-row">
+              <span class="price-label">AI Value Est.</span>
+              <span class="price-value ai-value">
+                {`${props.lot.ai_value_low?.toLocaleString()}–${props.lot.ai_value_high?.toLocaleString()} ${props.lot.currency || 'EUR'}`}
+              </span>
             </div>
           </Show>
         </div>
 
-        <TimeRemaining endTime={props.lot.auction_end_time} />
-
         <div class="lot-card-scores">
-          <Show when={props.lot.arbitrage_score !== undefined}>
-            <ScoreBadge
-              score={props.lot.arbitrage_score}
-              label="Arb"
-              variant="arbitrage"
-            />
+          <Show when={scores().arbitrage != null}>
+            <ScoreBadge score={scores().arbitrage ?? undefined} label="Arb" variant="arbitrage" />
           </Show>
-          <Show when={props.lot.norway_gap_score !== undefined}>
-            <ScoreBadge
-              score={props.lot.norway_gap_score}
-              label="Norway"
-              variant="norway"
-            />
+          <Show when={scores().taste != null}>
+            <ScoreBadge score={scores().taste ?? undefined} label="Taste" variant="taste" />
           </Show>
-          <Show when={props.lot.taste_score !== undefined}>
-            <ScoreBadge
-              score={props.lot.taste_score}
-              label="Taste"
-              variant="taste"
-            />
+          <Show when={scores().wildcard != null}>
+            <ScoreBadge score={scores().wildcard ?? undefined} label="Wild" variant="wildcard" />
           </Show>
-          <Show when={props.lot.wildcard_score !== undefined}>
-            <ScoreBadge
-              score={props.lot.wildcard_score}
-              label="Wild"
-              variant="wildcard"
-            />
+          <Show when={scores().demand != null && (scores().demand ?? 0) > 0}>
+            <ScoreBadge score={scores().demand ?? undefined} label="Wanted" variant="demand" />
           </Show>
         </div>
 
-        <Show when={props.lot.rationale}>
-          <p class="lot-card-rationale">"{props.lot.rationale}"</p>
+        <Show when={props.lot.lot_url}>
+          <a
+            href={props.lot.lot_url!}
+            target="_blank"
+            rel="noopener noreferrer"
+            class="lot-card-link"
+            onclick={(e: MouseEvent) => e.stopPropagation()}
+          >
+            View on {props.lot.source} &rarr;
+          </a>
         </Show>
-
-        <Show when={props.lot.risk_flags && props.lot.risk_flags!.length > 0}>
-          <div class="lot-card-risks">
-            <For each={props.lot.risk_flags}>
-              {(flag) => <span class="risk-flag">⚠ {flag}</span>}
-            </For>
-          </div>
-        </Show>
-
-        <div onclick={handleActionClick}>
-          <ActionBar lot={props.lot} onAction={props.onAction} />
-        </div>
       </div>
     </div>
   );

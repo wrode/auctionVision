@@ -17,22 +17,29 @@ export const LotDetailPage = () => {
   };
 
   return (
-    <div>
-      <div style="padding: var(--spacing-lg); border-bottom: 1px solid var(--border-color); background-color: var(--bg-secondary); display: flex; align-items: center; justify-content: space-between;">
-        <h1 class="header-title">Lot Details</h1>
-        <button class="action-btn secondary" onclick={handleGoBack}>
-          ← Back
+    <div class="ld-page-wrap">
+      <div class="ld-header-bar">
+        <button class="ld-back-btn" onclick={handleGoBack}>
+          &larr; Back
         </button>
+        <Show when={lotDetail()}>
+          <span class="ld-header-source">
+            {lotDetail()!.source}
+            <Show when={lotDetail()!.parsed_fields?.auction_house_name}>
+              {' '}&middot; {lotDetail()!.parsed_fields!.auction_house_name}
+            </Show>
+          </span>
+        </Show>
       </div>
 
-      <div class="content-scroll">
-        <Show when={!lotDetail.loading} fallback={<div class="loading"><span class="spinner"></span>Loading lot details...</div>}>
+      <div class="ld-body">
+        <Show when={!lotDetail.loading} fallback={<div class="loading"><span class="spinner"></span>Loading...</div>}>
           <Show
             when={lotDetail()}
             fallback={
               <div class="loading">
                 <div>Failed to load lot details</div>
-                <button class="action-btn" onclick={handleGoBack} style="margin-top: var(--spacing-lg);">
+                <button class="action-btn" onclick={handleGoBack} style="margin-top: var(--spacing-md);">
                   Go Back
                 </button>
               </div>

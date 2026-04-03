@@ -45,6 +45,8 @@ class Lot(Base):
     first_seen_at = mapped_column(DateTime, default=datetime.utcnow)
     last_seen_at = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     last_fetched_at = mapped_column(DateTime, nullable=True)
+    visual_triage_result = mapped_column(String(10), nullable=True)   # YES, NO, or NULL
+    visual_triage_reason = mapped_column(String(500), nullable=True)
     created_at = mapped_column(DateTime, default=datetime.utcnow)
     updated_at = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -129,6 +131,9 @@ class ParsedLotFields(Base):
     condition_text = mapped_column(String(200), nullable=True)
     dimensions_text = mapped_column(String(200), nullable=True)
     current_bid = mapped_column(Float, nullable=True)
+    bid_count = mapped_column(Integer, nullable=True)
+    hammer_price = mapped_column(Float, nullable=True)
+    sold_at = mapped_column(DateTime, nullable=True)
     estimate_low = mapped_column(Float, nullable=True)
     estimate_high = mapped_column(Float, nullable=True)
     currency = mapped_column(String(10), nullable=True)  # e.g., SEK, EUR
@@ -272,10 +277,11 @@ class LotScores(Base):
     lot_id = mapped_column(Integer, ForeignKey("lots.id"), nullable=False, unique=True)
     scoring_version = mapped_column(String(50), nullable=False)
     arbitrage_score = mapped_column(Float, nullable=True)
-    norway_gap_score = mapped_column(Float, nullable=True)
+    resale_arb_score = mapped_column(Float, nullable=True)
     taste_score = mapped_column(Float, nullable=True)
     wildcard_score = mapped_column(Float, nullable=True)
     urgency_score = mapped_column(Float, nullable=True)
+    demand_score = mapped_column(Float, nullable=True)  # matched Finn wanted listings
     overall_watch_score = mapped_column(Float, nullable=True)
     explanation_json = mapped_column(JSON, nullable=True)
     created_at = mapped_column(DateTime, default=datetime.utcnow)
@@ -286,10 +292,146 @@ class LotScores(Base):
 
     __table_args__ = (
         Index("idx_scores_arbitrage", "arbitrage_score"),
-        Index("idx_scores_norway_gap", "norway_gap_score"),
+        Index("idx_scores_resale_arb", "resale_arb_score"),
         Index("idx_scores_taste", "taste_score"),
         Index("idx_scores_wildcard", "wildcard_score"),
+        Index("idx_scores_demand", "demand_score"),
         Index("idx_scores_overall_watch", "overall_watch_score"),
+    )
+
+
+class WantedListing(Base):
+    """Finn.no 'Ønskes kjøpt' demand signal."""
+
+    __tablename__ = "wanted_listings"
+
+    id = mapped_column(Integer, primary_key=True)
+    finn_id = mapped_column(String(50), unique=True, nullable=False, index=True)
+    url = mapped_column(String(500), nullable=False)
+    title = mapped_column(String(500), nullable=False)
+    description = mapped_column(Text, nullable=True)
+    offered_price = mapped_column(Float, nullable=True)  # NOK, if stated
+    currency = mapped_column(String(10), default="NOK")
+    brand = mapped_column(String(200), nullable=True)
+    designer = mapped_column(String(200), nullable=True)
+    category = mapped_column(String(200), nullable=True)  # Finn subcategory name
+    buyer_location = mapped_column(String(200), nullable=True)
+    image_urls = mapped_column(JSON, nullable=True)
+    published_text = mapped_column(String(100), nullable=True)  # e.g. "16. mars"
+    status = mapped_column(String(50), default="active")  # active, expired, matched
+    is_high_value = mapped_column(Integer, default=0)  # SQLite bool
+    match_reason = mapped_column(String(200), nullable=True)  # why it passed the filter
+    first_seen_at = mapped_column(DateTime, default=datetime.utcnow)
+    last_seen_at = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    __table_args__ = (
+        Index("idx_wanted_status", "status"),
+        Index("idx_wanted_brand", "brand"),
+        Index("idx_wanted_high_value", "is_high_value"),
+    )
+
+
+class FinnMarketData(Base):
+    """Aggregated Finn.no for-sale market data per designer/category.
+
+    Each row represents a market snapshot: how many items of a given
+    designer/brand are listed for sale in Norway, at what prices.
+    Used to compute supply volume and resale price benchmarks.
+    """
+
+    __tablename__ = "finn_market_data"
+
+    id = mapped_column(Integer, primary_key=True)
+    query_type = mapped_column(String(50), nullable=False)  # "designer", "brand", "category"
+    query_value = mapped_column(String(200), nullable=False)  # "Hans Wegner", "Fritz Hansen"
+    finn_category = mapped_column(String(200), nullable=True)  # Finn subcategory name
+    listing_count = mapped_column(Integer, nullable=False, default=0)
+    avg_price_nok = mapped_column(Float, nullable=True)
+    median_price_nok = mapped_column(Float, nullable=True)
+    min_price_nok = mapped_column(Float, nullable=True)
+    max_price_nok = mapped_column(Float, nullable=True)
+    price_samples = mapped_column(JSON, nullable=True)  # list of prices for distribution
+    sample_listings = mapped_column(JSON, nullable=True)  # [{title, price, url}, ...]
+    scraped_at = mapped_column(DateTime, default=datetime.utcnow)
+
+    __table_args__ = (
+        Index("idx_finn_market_query", "query_type", "query_value"),
+        Index("idx_finn_market_scraped", "scraped_at"),
+    )
+
+
+class FinnForSaleListing(Base):
+    """Individual Finn.no for-sale listing, tracked over time for churn analysis.
+
+    By comparing scrape runs, we can detect when listings disappear (= sold),
+    giving us actual sell-through velocity per designer/category.
+    """
+
+    __tablename__ = "finn_forsale_listings"
+
+    id = mapped_column(Integer, primary_key=True)
+    finn_id = mapped_column(String(50), nullable=False, index=True)
+    url = mapped_column(String(500), nullable=False)
+    title = mapped_column(String(500), nullable=False)
+    price_nok = mapped_column(Float, nullable=True)
+    brand = mapped_column(String(200), nullable=True)
+    location = mapped_column(String(200), nullable=True)
+    search_query = mapped_column(String(200), nullable=False)  # e.g. "Hans Wegner"
+    query_type = mapped_column(String(50), nullable=False)  # "designer" or "brand"
+    status = mapped_column(String(50), default="active")  # active, disappeared
+    first_seen_at = mapped_column(DateTime, default=datetime.utcnow)
+    last_seen_at = mapped_column(DateTime, default=datetime.utcnow)
+    disappeared_at = mapped_column(DateTime, nullable=True)  # when we first noticed it gone
+
+    __table_args__ = (
+        Index("idx_forsale_finn_id", "finn_id"),
+        Index("idx_forsale_query", "search_query", "query_type"),
+        Index("idx_forsale_status", "status"),
+    )
+
+
+class HistoricalHammer(Base):
+    """Historical realized hammer prices from Auctionet ended auctions.
+
+    Used for BUY-SIDE prediction only: predicts what you'll pay,
+    NOT what an item is worth on resale. Resale value comes from
+    the Comparable table (external sources like FINN, Blomqvist, Pamono).
+    """
+
+    __tablename__ = "historical_hammers"
+
+    id = mapped_column(Integer, primary_key=True)
+    external_lot_id = mapped_column(String(200), unique=True, nullable=False, index=True)
+    lot_url = mapped_column(String(500), nullable=False)
+    title = mapped_column(String(500), nullable=False)
+    description = mapped_column(Text, nullable=True)
+    category_raw = mapped_column(String(200), nullable=True)
+
+    # Matching fields
+    designer_name = mapped_column(String(200), nullable=True, index=True)
+    object_type = mapped_column(String(100), nullable=True, index=True)
+    materials = mapped_column(JSON, nullable=True)
+
+    # Price data
+    hammer_price = mapped_column(Float, nullable=True)  # Final sold price (EUR)
+    estimate_low = mapped_column(Float, nullable=True)
+    estimate_high = mapped_column(Float, nullable=True)
+    currency = mapped_column(String(10), default="EUR")
+
+    # Metadata
+    auction_house_name = mapped_column(String(200), nullable=True)
+    seller_location = mapped_column(String(200), nullable=True)
+    auction_end_date = mapped_column(DateTime, nullable=True)
+    was_sold = mapped_column(Integer, default=1)  # SQLite bool: 1=sold, 0=unsold
+    bid_count = mapped_column(Integer, nullable=True)
+
+    # Scraper metadata
+    scraped_at = mapped_column(DateTime, default=datetime.utcnow)
+
+    __table_args__ = (
+        Index("idx_hist_designer", "designer_name"),
+        Index("idx_hist_object_type", "object_type"),
+        Index("idx_hist_end_date", "auction_end_date"),
     )
 
 

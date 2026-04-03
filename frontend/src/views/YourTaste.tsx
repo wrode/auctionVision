@@ -5,7 +5,7 @@ import { LotCard } from '../components/LotCard';
 
 export const YourTaste = () => {
   const [viewData] = createResource(() =>
-    apiClient.fetchView('your_taste', { limit: 100 }),
+    apiClient.fetchView('taste', { limit: 100 }),
   );
 
   const handleRefresh = async () => {
@@ -25,7 +25,7 @@ export const YourTaste = () => {
     };
 
     lots.forEach((lot) => {
-      const category = lot.taste_category || 'exploratory';
+      const category = (lot as any).taste_category || 'exploratory';
       grouped[category].push(lot);
     });
 
@@ -36,8 +36,8 @@ export const YourTaste = () => {
     <>
       <ViewHeader
         title="Your Taste"
-        lotCount={viewData()?.lot_count}
-        lastRefreshed={viewData()?.last_refreshed}
+        lotCount={viewData()?.total}
+        lastRefreshed={viewData()?.filters?.last_refreshed}
         onRefresh={handleRefresh}
         loading={viewData.loading}
       />

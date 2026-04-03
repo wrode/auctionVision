@@ -16,6 +16,9 @@ class ParsedFields:
         condition_text: Optional[str] = None,
         dimensions_text: Optional[str] = None,
         current_bid: Optional[float] = None,
+        bid_count: Optional[int] = None,
+        hammer_price: Optional[float] = None,
+        sold_at: Optional[Any] = None,
         estimate_low: Optional[float] = None,
         estimate_high: Optional[float] = None,
         currency: Optional[str] = None,
@@ -37,6 +40,9 @@ class ParsedFields:
         self.condition_text = condition_text
         self.dimensions_text = dimensions_text
         self.current_bid = current_bid
+        self.bid_count = bid_count
+        self.hammer_price = hammer_price
+        self.sold_at = sold_at
         self.estimate_low = estimate_low
         self.estimate_high = estimate_high
         self.currency = currency
@@ -60,6 +66,9 @@ class ParsedFields:
             "condition_text": self.condition_text,
             "dimensions_text": self.dimensions_text,
             "current_bid": self.current_bid,
+            "bid_count": self.bid_count,
+            "hammer_price": self.hammer_price,
+            "sold_at": self.sold_at,
             "estimate_low": self.estimate_low,
             "estimate_high": self.estimate_high,
             "currency": self.currency,
