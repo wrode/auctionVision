@@ -55,8 +55,9 @@ data/
 *.sqlite
 *.sqlite3
 
-# Claude Code (user-specific)
-.claude/
+# Claude Code (keep settings.json shared, exclude local overrides and memory)
+.claude/settings.local.json
+.claude/memory/
 
 # Node (frontend)
 node_modules/
